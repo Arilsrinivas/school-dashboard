@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+case "$POSTGRES_PASSWORD:$EDUCONNECT_APP_PASSWORD:$EDUCONNECT_PLATFORM_PASSWORD" in
+  *replace-with*) echo "Set local database passwords in .env before starting PostgreSQL." >&2; exit 1 ;;
+esac
+psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --set=app_password="$EDUCONNECT_APP_PASSWORD" --set=platform_password="$EDUCONNECT_PLATFORM_PASSWORD" <<'SQL'
+CREATE ROLE educonnect_app LOGIN PASSWORD :'app_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+CREATE ROLE educonnect_platform LOGIN PASSWORD :'platform_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT BYPASSRLS;
+GRANT CONNECT ON DATABASE educonnect TO educonnect_app;
+GRANT CONNECT ON DATABASE educonnect TO educonnect_platform;
+GRANT USAGE ON SCHEMA public TO educonnect_app;
+GRANT USAGE ON SCHEMA public TO educonnect_platform;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO educonnect_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO educonnect_platform;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO educonnect_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO educonnect_platform;
+ALTER DEFAULT PRIVILEGES FOR ROLE educonnect IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO educonnect_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE educonnect IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO educonnect_platform;
+ALTER DEFAULT PRIVILEGES FOR ROLE educonnect IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO educonnect_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE educonnect IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO educonnect_platform;
+SQL

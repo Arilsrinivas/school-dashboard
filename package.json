@@ -1,0 +1,25 @@
+{
+  "name": "calmstacks-educonnect",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "tsx scripts/dev.ts",
+    "dev:db": "tsx scripts/dev-db.ts",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
+    "test": "npm run test --workspace apps/api",
+    "test:e2e": "npm --workspace apps/api run test:e2e",
+    "db:migrate": "npm --workspace apps/api run db:migrate",
+    "db:bootstrap-admin": "npm --workspace apps/api run db:bootstrap-admin"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
+    "@electric-sql/pglite-socket": "^0.2.16",
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
