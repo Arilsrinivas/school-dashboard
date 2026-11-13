@@ -66,7 +66,25 @@ npx tsx scripts/school-lifecycle-runner.ts
 npm run build
 ```
 
-## Production Deployment
+## Vercel Deployment
+
+Deploy the web application to Vercel with one click:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FArilsrinivas%2Fschool-dashboard&project-name=school-dashboard&build-command=npm%20run%20vercel-build&output-directory=apps%2Fweb%2Fdist&env=VITE_API_URL&envDescription=URL%20of%20your%20EduConnect%20backend%20API%20(e.g.%20https%3A%2F%2Fapi.yourdomain.com))
+
+### Manual Vercel Setup:
+1. Go to **[vercel.com/new](https://vercel.com/new)** and import your GitHub repository: `Arilsrinivas/school-dashboard`.
+2. Vercel automatically detects the root `vercel.json` and configures:
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run vercel-build`
+   - **Output Directory**: `apps/web/dist`
+3. In **Environment Variables**, add:
+   - `VITE_API_URL`: The URL of your deployed backend API (e.g. `https://api.yourdomain.com` or your Railway/Render backend URL).
+4. Click **Deploy**. Your mobile-optimized school dashboard is live globally on Vercel's Edge Network!
+
+---
+
+## Production Deployment (Full Stack)
 
 EduConnect is fully containerized and production-ready with multi-stage Docker builds, Nginx reverse proxying, and healthchecks.
 

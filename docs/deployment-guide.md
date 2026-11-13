@@ -118,6 +118,24 @@ For fully managed serverless infrastructure:
 
 ---
 
+### Option C: Vercel Deployment (Frontend / Mobile SPA)
+
+The repository includes ready-to-deploy `vercel.json` configurations for Vercel's global CDN:
+
+1. **Import Project into Vercel**:
+   - Navigate to [vercel.com/new](https://vercel.com/new) and link your GitHub repository (`Arilsrinivas/school-dashboard`).
+   - The included `vercel.json` automatically configures:
+     - **Build Command**: `npm run vercel-build`
+     - **Output Directory**: `apps/web/dist`
+     - **Framework**: Vite
+     - **SPA Fallback Rewrites**: `/(.*) -> /index.html`
+2. **Environment Variables on Vercel**:
+   - Add `VITE_API_URL`: Points to your production API backend (e.g. `https://api.yourdomain.com` or Railway/Render service).
+3. **Deploy**:
+   - Vercel automatically deploys preview URLs on every branch and updates production on every push to `main`.
+
+---
+
 ## 3. Post-Deployment Database Initialization
 
 ### 1. Execute Migrations
