@@ -1,8 +1,39 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
-const defaultDb = process.env.DATABASE_URL || process.env.POSTGRES_URL || 'postgresql://educonnect_app:local-dev-runtime-pass-2026@127.0.0.1:5432/postgres?sslmode=disable';
-const defaultPlatformDb = process.env.PLATFORM_DATABASE_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL || 'postgresql://educonnect_platform:local-dev-platform-pass-2026@127.0.0.1:5432/postgres?sslmode=disable';
+function resolveDatabaseUrl(): string {
+  const direct =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.STORAGE_POSTGRES_URL ||
+    process.env.STORAGE_URL ||
+    process.env.STORAGE_POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.STORAGE_POSTGRES_URL_NON_POOLING;
+  if (direct) return direct;
+
+  for (const [key, val] of Object.entries(process.env)) {
+    if (typeof val === 'string' && (val.startsWith('postgres://') || val.startsWith('postgresql://'))) {
+      return val;
+    }
+  }
+
+  return 'postgresql://educonnect_app:local-dev-runtime-pass-2026@127.0.0.1:5432/postgres?sslmode=disable';
+}
+
+function resolvePlatformDatabaseUrl(): string {
+  const direct =
+    process.env.PLATFORM_DATABASE_URL ||
+    process.env.MIGRATION_DATABASE_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.STORAGE_POSTGRES_URL_NON_POOLING;
+  if (direct) return direct;
+  return resolveDatabaseUrl();
+}
+
+const defaultDb = resolveDatabaseUrl();
+const defaultPlatformDb = resolvePlatformDatabaseUrl();
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
