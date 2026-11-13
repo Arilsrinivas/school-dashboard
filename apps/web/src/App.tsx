@@ -78,7 +78,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
     setBusy(true);
     setError('');
     try {
-      const u = await login(loginEmail, loginPassword, kind === 'school' ? (loginSchoolId || undefined) : undefined);
+      const u = await login(loginEmail, loginPassword, kind === 'school' ? (loginSchoolId || undefined) : undefined, kind);
       localStorage.setItem('educonnect_has_account', 'true');
       onLogin(u);
     } catch (ex) {

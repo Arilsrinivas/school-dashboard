@@ -1,5 +1,5 @@
-const API = import.meta.env.VITE_API_URL !== undefined
-  ? (import.meta.env.VITE_API_URL as string)
+const API = (typeof import.meta.env.VITE_API_URL === 'string' && import.meta.env.VITE_API_URL.trim() !== '')
+  ? import.meta.env.VITE_API_URL.trim()
   : (import.meta.env.PROD ? '' : 'http://localhost:4000');
 let accessToken:string|null=null;
 export function setAccessToken(token:string|null){accessToken=token;}
@@ -35,7 +35,15 @@ export async function request<T>(path:string,init:RequestInit={}):Promise<T>{
   if(!response.ok){let message=`Request failed (${response.status})`;try{const payload=await response.json();message=payload.error||message;}catch{}throw new Error(message);}
   if(response.status===204)return undefined as T;return response.json() as Promise<T>;
 }
-export async function login(email:string,password:string,schoolId?:string){const data=await request<{accessToken:string;user:User}>(schoolId?'/api/auth/school/login':'/api/auth/platform/login',{method:'POST',body:JSON.stringify({email,password,...(schoolId?{schoolId}:{})})});setAccessToken(data.accessToken);return data.user;}
+export async function login(email:string,password:string,schoolId?:string,kind:'platform'|'school'='school'){
+  const endpoint = kind === 'platform' ? '/api/auth/platform/login' : '/api/auth/school/login';
+  const data = await request<{accessToken:string;user:User}>(endpoint, {
+    method: 'POST',
+    body: JSON.stringify({ email, password, ...(schoolId ? { schoolId } : {}) }),
+  });
+  setAccessToken(data.accessToken);
+  return data.user;
+}
 export async function registerSchool(params:{schoolName:string;administratorName:string;email:string;password:string;phone?:string;schoolType?:string}){const data=await request<{accessToken:string;user:User & {schoolId:string}}>('/api/auth/register-school',{method:'POST',body:JSON.stringify(params)});setAccessToken(data.accessToken);return data.user;}
 export async function loginWithGoogle(params:{email:string;name:string;schoolName?:string;credential?:string}){const data=await request<{accessToken:string;user:User & {schoolId?:string}}>('/api/auth/google',{method:'POST',body:JSON.stringify(params)});if(data.accessToken)setAccessToken(data.accessToken);return data.user;}
 export async function acceptInvitation(token:string,name:string,password:string){const data=await request<{accessToken:string;user:User & {schoolId:string}}>('/api/auth/accept-invitation',{method:'POST',body:JSON.stringify({token,name,password})});setAccessToken(data.accessToken);return data.user;}

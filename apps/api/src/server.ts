@@ -27,7 +27,10 @@ app.use(cors({origin:env.WEB_ORIGIN,credentials:true,methods:['GET','POST','PATC
 app.use(compression());
 app.use(express.json({limit:'1mb'}));
 app.get('/health',async(_req,res)=>{try{await pool.query('SELECT 1');res.json({status:'ok',database:'ok'});}catch{res.status(503).json({status:'unavailable',database:'unavailable'});}});
-app.use('/api/auth',rateLimit({windowMs:15*60*1000,limit:20,standardHeaders:'draft-7',legacyHeaders:false}),authRouter);
+const authLimiter = env.NODE_ENV === 'production'
+  ? rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false })
+  : (_req: express.Request, _res: express.Response, next: express.NextFunction) => next();
+app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/platform',supportRouter);
 app.use('/api/platform',platformRouter);
 app.use('/api/school',schoolRouter);
