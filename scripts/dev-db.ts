@@ -7,7 +7,7 @@ import argon2 from 'argon2';
 async function main() {
   const dbPath = resolve(process.cwd(), '.pgdata');
   const db = new PGlite(dbPath);
-  const socket = new PGLiteSocketServer({ db, host: '127.0.0.1', port: 5432, maxConnections: 32 });
+  const socket = new PGLiteSocketServer({ db, host: '127.0.0.1', port: 5432, maxConnections: 128 });
 
   await socket.start();
   console.log('PGlite PostgreSQL server listening on 127.0.0.1:5432 (persisted to .pgdata)');

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, Users, X } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
 import { acceptInvitation, exportCsv, login, loginWithGoogle, logout, registerSchool, request, restoreSession, type School, type User } from './api';
 import { isFirebaseConfigured, signInWithFirebaseGoogle } from './firebase';
 import AttendanceWorkspace from './AttendanceWorkspace';
@@ -455,12 +455,26 @@ function InvitationPage(){
 }
 
 function RecoveryPage(){
-  const params=new URLSearchParams(window.location.search),[kind,setKind]=useState<'platform'|'school'>(params.get('kind')==='school'?'school':'platform'),[schoolId,setSchoolId]=useState(params.get('schoolId')||''),[email,setEmail]=useState(''),[token,setToken]=useState(params.get('token')||''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[developmentUrl,setDevelopmentUrl]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[successComplete,setSuccessComplete]=useState(false);
+  const params=new URLSearchParams(window.location.search);
+  const [kind,setKind]=useState<'platform'|'school'>(params.get('kind')==='school'?'school':'platform');
+  const [schoolId,setSchoolId]=useState(params.get('schoolId')||'');
+  const [email,setEmail]=useState('');
+  const [token,setToken]=useState(params.get('token')||'');
+  const [password,setPassword]=useState('');
+  const [message,setMessage]=useState('');
+  const [matchedSchool,setMatchedSchool]=useState<{name?:string;schoolId?:string}|null>(null);
+  const [developmentUrl,setDevelopmentUrl]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [notFound,setNotFound]=useState(false);
+  const [successComplete,setSuccessComplete]=useState(false);
+
   async function submit(e:React.FormEvent){
     e.preventDefault();
     setBusy(true);
     setError('');
     setMessage('');
+    setNotFound(false);
     try{
       if(token){
         await request('/api/auth/recovery/confirm',{method:'POST',body:JSON.stringify({token,password})});
@@ -468,8 +482,17 @@ function RecoveryPage(){
         setSuccessComplete(true);
         setPassword('');
       }else{
-        const result=await request<{message:string;developmentUrl?:string;invitationUrl?:string}>('/api/auth/recovery/request',{method:'POST',body:JSON.stringify({kind,email,...(kind==='school'?{schoolId}:{})})});
+        const result=await request<{success?:boolean;message:string;schoolId?:string;schoolName?:string;developmentUrl?:string;invitationUrl?:string;notFound?:boolean}>('/api/auth/recovery/request',{
+          method:'POST',
+          body:JSON.stringify({kind,email,...(kind==='school'&&schoolId.trim()?{schoolId:schoolId.trim()}:{})})
+        });
         setMessage(result.message);
+        if(result.schoolName||result.schoolId){
+          setMatchedSchool({name:result.schoolName,schoolId:result.schoolId});
+        }
+        if(result.notFound){
+          setNotFound(true);
+        }
         setDevelopmentUrl(result.developmentUrl||result.invitationUrl||'');
       }
     }catch(ex){
@@ -478,27 +501,329 @@ function RecoveryPage(){
       setBusy(false);
     }
   }
-  return <main className="invite-page"><section className="invite-card"><div className="brand"><div className="brand-mark"><ShieldCheck size={19}/></div><span>calmstacks <b>educonnect</b></span></div><div className="eyebrow invite-eyebrow">ACCOUNT SECURITY</div><h1>{token?'Choose a new password':'Recover your account'}</h1><p>{token?'The recovery link is one time use and expires after 30 minutes.':'We will send a one time recovery link if the account matches the details.'}</p>{!token&&!message&&<div className="auth-switch"><button className={kind==='platform'?'selected':''} onClick={()=>setKind('platform')}>Platform account</button><button className={kind==='school'?'selected':''} onClick={()=>setKind('school')}>School account</button></div>}
-  {successComplete?<div style={{marginTop:'1.5rem',display:'flex',flexDirection:'column',gap:'1rem'}}><div className="success-banner" style={{padding:'1rem'}}><Check size={18}/> {message}</div><a className="btn btn-primary btn-wide" href="/" style={{textDecoration:'none',textAlign:'center',justifyContent:'center',display:'flex',alignItems:'center'}}>Proceed to sign in <ChevronRight size={16}/></a></div>:<form className="form-stack" onSubmit={submit}>
-    {token?<label>New password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={12} autoComplete="new-password" required/><small className="subtle">Use at least 12 characters.</small></label>:<>{kind==='school'&&<label>School ID<input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0001" required/></label>}<label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username" required/></label></>}
-    {error&&<div className="error-banner">{error}</div>}
-    {message&&<div className="success-banner" style={{display:'flex',flexDirection:'column',gap:'0.75rem',padding:'1rem'}}>
-      <div><Check size={16}/> {message}</div>
-      {developmentUrl&&<div style={{padding:'0.75rem',background:'#ffffff',borderRadius:'6px',border:'1px solid #bbf7d0',marginTop:'0.25rem'}}>
-        <div style={{fontSize:'0.75rem',color:'#374151',marginBottom:'0.5rem',fontWeight:500}}>
-          {developmentUrl.includes('accept-invitation')?'Pending invitation found for this school account:':'Direct password reset link generated:'}
-        </div>
-        <a href={developmentUrl} className="btn btn-primary btn-wide" style={{textDecoration:'none',textAlign:'center',justifyContent:'center',display:'flex',alignItems:'center'}}>
-          {developmentUrl.includes('accept-invitation')?'Accept Invitation & Set Password':'Reset Password Now'} <ChevronRight size={16}/>
-        </a>
-      </div>}
+
+  function applyDirectReset(url:string){
+    try{
+      const parsed=new URL(url,window.location.origin);
+      const t=parsed.searchParams.get('token');
+      if(t){
+        setToken(t);
+        setMessage('');
+        setDevelopmentUrl('');
+      }else{
+        window.location.href=url;
+      }
+    }catch{
+      window.location.href=url;
+    }
+  }
+
+  return <main className="invite-page"><section className="invite-card">
+    <div className="brand"><div className="brand-mark"><ShieldCheck size={19}/></div><span>calmstacks <b>educonnect</b></span></div>
+    <div className="eyebrow invite-eyebrow">ACCOUNT SECURITY</div>
+    <h1>{token?'Choose a new password':'Recover your account'}</h1>
+    <p>{token?'Enter your new secure password below (minimum 12 characters).':'We will send a one time recovery link if the account matches our records.'}</p>
+    
+    {!token&&!message&&<div className="auth-switch">
+      <button className={kind==='platform'?'selected':''} onClick={()=>setKind('platform')}>Platform account</button>
+      <button className={kind==='school'?'selected':''} onClick={()=>setKind('school')}>School account</button>
     </div>}
-    {!successComplete&&<button className="btn btn-primary btn-wide" disabled={busy}>{busy?'Please wait…':token?'Update password':'Send recovery link'}<ChevronRight size={16}/></button>}
-  </form>}
-  <div className="login-note"><ShieldCheck size={15}/> Recovery links are hashed and expire after 30 minutes</div><a className="recovery-link" href="/">Return to sign in</a></section></main>;
+
+    {successComplete ? (
+      <div style={{marginTop:'1.5rem',display:'flex',flexDirection:'column',gap:'1rem'}}>
+        <div className="success-banner" style={{padding:'1rem'}}><Check size={18}/> {message}</div>
+        <a className="btn btn-primary btn-wide" href="/" style={{textDecoration:'none',textAlign:'center',justifyContent:'center',display:'flex',alignItems:'center'}}>
+          Proceed to sign in <ChevronRight size={16}/>
+        </a>
+      </div>
+    ) : (
+      <form className="form-stack" onSubmit={submit}>
+        {token ? (
+          <label>
+            New password
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={12} autoComplete="new-password" required placeholder="At least 12 characters"/>
+            <small className="subtle">Use letters, numbers, and symbols.</small>
+          </label>
+        ) : (
+          <>
+            {kind==='school'&&<label>
+              School ID <small style={{color:'#64748b',fontWeight:400}}>(optional — auto-detected from email)</small>
+              <input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0035 (or leave empty)"/>
+            </label>}
+            <label>
+              Email address
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="username" required placeholder="you@school.edu"/>
+            </label>
+          </>
+        )}
+
+        {error&&<div className="error-banner">{error}</div>}
+
+        {notFound&&<div className="error-banner" style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+          <div>No active school account found for "{email}".</div>
+          <div style={{display:'flex',gap:'8px'}}>
+            <a href="/" className="btn btn-secondary small-btn" style={{textDecoration:'none',display:'inline-flex',alignItems:'center'}}>
+              Register school workspace &rarr;
+            </a>
+          </div>
+        </div>}
+
+        {message&&!notFound&&<div className="success-banner" style={{display:'flex',flexDirection:'column',gap:'0.75rem',padding:'1rem'}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:'8px'}}>
+            <Check size={18} style={{flexShrink:0,marginTop:'2px'}}/>
+            <div>
+              {matchedSchool?.name&&<div style={{fontWeight:700,fontSize:'13px',color:'#14532d',marginBottom:'2px'}}>
+                School Matched: {matchedSchool.name} ({matchedSchool.schoolId})
+              </div>}
+              <div>{message}</div>
+            </div>
+          </div>
+          {developmentUrl&&<div style={{padding:'0.85rem',background:'#ffffff',borderRadius:'8px',border:'1px solid #bbf7d0',marginTop:'0.25rem',display:'flex',flexDirection:'column',gap:'8px'}}>
+            <div style={{fontSize:'0.75rem',color:'#475569',fontWeight:500}}>
+              {developmentUrl.includes('accept-invitation')
+                ? 'Pending invitation found for this school account:'
+                : 'Direct password reset link is ready for immediate access:'}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-wide"
+              style={{justifyContent:'center',display:'flex',alignItems:'center',gap:'6px'}}
+              onClick={()=>applyDirectReset(developmentUrl)}
+            >
+              {developmentUrl.includes('accept-invitation')?'Accept Invitation & Set Password':'Reset Password Now'} <ChevronRight size={16}/>
+            </button>
+          </div>}
+        </div>}
+
+        {!successComplete&&<button className="btn btn-primary btn-wide" disabled={busy}>
+          {busy?'Please wait…':token?'Update password':'Send recovery link'}<ChevronRight size={16}/>
+        </button>}
+      </form>
+    )}
+
+    <div className="login-note"><ShieldCheck size={15}/> Recovery links are hashed and expire after 30 minutes</div>
+    <a className="recovery-link" href="/">Return to sign in</a>
+  </section></main>;
 }
 
 type SchoolTab = 'overview'|'classes'|'students'|'attendance'|'homework'|'exams'|'timetable'|'fees'|'announcements'|'reports'|'settings'|'access';
+
+function SchoolOverviewView({
+  metrics,
+  user,
+  academicYear,
+  onNavigate,
+  onAdmitStudent,
+  onAddClass
+}: {
+  metrics: { students: number; teachers: number; parents: number; attendance_marked: number } | undefined;
+  user: User;
+  academicYear?: string;
+  onNavigate: (tab: SchoolTab) => void;
+  onAdmitStudent: () => void;
+  onAddClass: () => void;
+}) {
+  const studentsCount = metrics?.students || 0;
+  const teachersCount = metrics?.teachers || 0;
+  const parentsCount = metrics?.parents || 0;
+  const attendanceToday = metrics?.attendance_marked || 0;
+  const attendancePercent = studentsCount > 0 ? Math.min(100, Math.round((attendanceToday / studentsCount) * 100)) : 0;
+
+  return (
+    <div className="overview-container">
+      {/* 1. School Quick Stats Grid */}
+      <div className="overview-stats-grid">
+        <div className="stat-card stat-students" onClick={() => onNavigate('students')} role="button" tabIndex={0}>
+          <div className="stat-icon-wrapper blue">
+            <GraduationCap size={22} />
+          </div>
+          <div className="stat-content">
+            <span className="stat-label">Enrolled Students</span>
+            <div className="stat-number">{formatNumber(studentsCount)}</div>
+            <span className="stat-sub">Active in roster &rarr;</span>
+          </div>
+        </div>
+
+        <div className="stat-card stat-teachers" onClick={() => onNavigate('classes')} role="button" tabIndex={0}>
+          <div className="stat-icon-wrapper purple">
+            <Users size={22} />
+          </div>
+          <div className="stat-content">
+            <span className="stat-label">Teaching Staff</span>
+            <div className="stat-number">{formatNumber(teachersCount)}</div>
+            <span className="stat-sub">Active faculty &rarr;</span>
+          </div>
+        </div>
+
+        <div className="stat-card stat-parents" onClick={() => onNavigate('access')} role="button" tabIndex={0}>
+          <div className="stat-icon-wrapper amber">
+            <ShieldCheck size={22} />
+          </div>
+          <div className="stat-content">
+            <span className="stat-label">Guardian Accounts</span>
+            <div className="stat-number">{formatNumber(parentsCount)}</div>
+            <span className="stat-sub">Linked parents &rarr;</span>
+          </div>
+        </div>
+
+        <div className="stat-card stat-attendance" onClick={() => onNavigate('attendance')} role="button" tabIndex={0}>
+          <div className="stat-icon-wrapper emerald">
+            <CalendarCheck size={22} />
+          </div>
+          <div className="stat-content">
+            <span className="stat-label">Today's Attendance</span>
+            <div className="stat-number">{formatNumber(attendanceToday)}</div>
+            <span className="stat-sub">Marked records &rarr;</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Today's Attendance Snapshot Bar */}
+      <div className="overview-daily-bar">
+        <div className="daily-bar-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
+            <strong style={{ fontSize: '13px', color: '#1e293b' }}>Daily Attendance Progress</strong>
+          </div>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>
+            {attendanceToday} of {studentsCount} marked ({attendancePercent}%)
+          </span>
+        </div>
+        <div className="daily-progress-track">
+          <div className="daily-progress-fill" style={{ width: `${attendancePercent}%` }} />
+        </div>
+        <div className="daily-bar-footer">
+          <span style={{ fontSize: '11px', color: '#64748b' }}>
+            {studentsCount === 0 ? 'Admit students to begin tracking daily attendance.' : attendanceToday >= studentsCount ? '✓ Full class attendance marked for today.' : 'Take register for missing classes.'}
+          </span>
+          <button className="btn btn-secondary small-btn" onClick={() => onNavigate('attendance')}>
+            Open Daily Register &rarr;
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Mobile Quick Actions Hub */}
+      <div className="overview-section">
+        <div className="section-title">
+          <Sparkles size={16} /> QUICK ACTIONS & SHORTCUTS
+        </div>
+        <div className="quick-actions-grid">
+          <button type="button" className="quick-action-card" onClick={() => onNavigate('attendance')}>
+            <div className="qa-icon emerald"><CalendarCheck size={20} /></div>
+            <div className="qa-text">
+              <strong>Take Attendance</strong>
+              <small>Mark present/absent</small>
+            </div>
+            <ChevronRight size={16} className="qa-arrow" />
+          </button>
+
+          <button type="button" className="quick-action-card" onClick={onAdmitStudent}>
+            <div className="qa-icon blue"><UserPlus size={20} /></div>
+            <div className="qa-text">
+              <strong>Admit Student</strong>
+              <small>New enrollment form</small>
+            </div>
+            <ChevronRight size={16} className="qa-arrow" />
+          </button>
+
+          <button type="button" className="quick-action-card" onClick={onAddClass}>
+            <div className="qa-icon indigo"><Layers size={20} /></div>
+            <div className="qa-text">
+              <strong>Add Class</strong>
+              <small>Create grade & section</small>
+            </div>
+            <ChevronRight size={16} className="qa-arrow" />
+          </button>
+
+          <button type="button" className="quick-action-card" onClick={() => onNavigate('fees')}>
+            <div className="qa-icon amber"><Receipt size={20} /></div>
+            <div className="qa-text">
+              <strong>Fees & Billing</strong>
+              <small>Collect & manage dues</small>
+            </div>
+            <ChevronRight size={16} className="qa-arrow" />
+          </button>
+
+          <button type="button" className="quick-action-card" onClick={() => onNavigate('timetable')}>
+            <div className="qa-icon violet"><Clock size={20} /></div>
+            <div className="qa-text">
+              <strong>Weekly Timetable</strong>
+              <small>Period schedules</small>
+            </div>
+            <ChevronRight size={16} className="qa-arrow" />
+          </button>
+
+          <button type="button" className="quick-action-card" onClick={() => onNavigate('announcements')}>
+            <div className="qa-icon rose"><Bell size={20} /></div>
+            <div className="qa-text">
+              <strong>Announcements</strong>
+              <small>Broadcast notice</small>
+            </div>
+            <ChevronRight size={16} className="qa-arrow" />
+          </button>
+        </div>
+      </div>
+
+      {/* 4. Academic Operational Overview */}
+      <div className="overview-two-col">
+        {/* Module Directory Guide */}
+        <div className="overview-panel">
+          <div className="panel-kicker">WORKPLACE MODULES</div>
+          <h3>School Management Suite</h3>
+          <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 14px' }}>
+            All administrative tools and school operations are accessible anytime from the top bar or bottom navigation.
+          </p>
+          <div className="module-links-list">
+            <div className="module-link-row" onClick={() => onNavigate('classes')}>
+              <Layers size={16} /> <span>Classes & Sections</span> <small>&rarr;</small>
+            </div>
+            <div className="module-link-row" onClick={() => onNavigate('students')}>
+              <GraduationCap size={16} /> <span>Student Directory & Records</span> <small>&rarr;</small>
+            </div>
+            <div className="module-link-row" onClick={() => onNavigate('exams')}>
+              <Award size={16} /> <span>Exams & Report Cards</span> <small>&rarr;</small>
+            </div>
+            <div className="module-link-row" onClick={() => onNavigate('reports')}>
+              <BarChart3 size={16} /> <span>Academic & Attendance Analytics</span> <small>&rarr;</small>
+            </div>
+            <div className="module-link-row" onClick={() => onNavigate('settings')}>
+              <Settings size={16} /> <span>School Settings & Terms</span> <small>&rarr;</small>
+            </div>
+          </div>
+        </div>
+
+        {/* Security & Multi-tenant status card */}
+        <div className="overview-panel">
+          <div className="panel-kicker">TENANT BOUNDARY & SECURITY</div>
+          <h3>Isolated School Workspace</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+            <div className="security-status-item">
+              <ShieldCheck size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Row-Level Security Active</strong>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>School ID: <b>{user.schoolId}</b> · Strict tenant isolation enabled</div>
+              </div>
+            </div>
+            <div className="security-status-item">
+              <Check size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Academic Year: {academicYear || '2026-2027'}</strong>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>Active enrollment and grading period</div>
+              </div>
+            </div>
+            <div className="security-status-item">
+              <Users size={18} style={{ color: '#2563eb', flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Role: {user.schoolRoleName || user.schoolRole || user.role}</strong>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>{user.permissions?.length || 0} granular privileges assigned</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
   const schoolAdmin=user.permissions?.includes('school:roles:manage')??user.role==='school_admin';
@@ -726,7 +1051,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
         </>}
       </div>
     </div>}
-  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<div className="metric-grid school-metrics">{[['Students',q.data?.metrics.students],['Teachers',q.data?.metrics.teachers],['Parents',q.data?.metrics.parents],['Attendance recorded today',q.data?.metrics.attendance_marked]].map(([label,value])=><div className="metric-card" key={label as string}><div className="metric-top">{label}</div><div className="metric-value">{q.isLoading?<div className="skeleton number-skeleton"/>:formatNumber(Number(value||0))}</div></div>)}</div>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
+  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
   {(bulkError||addYear.isError||addClass.isError||addStudent.isError||bulkImport.isError)&&<div className="error-inline school-error">{bulkError||((addYear.error||addClass.error||addStudent.error||bulkImport.error) as Error).message}</div>}{dialog&&<div className="modal-backdrop"><section className="modal school-modal"><div className="modal-head"><div><div className="eyebrow">SCHOOL SETUP</div><h2>{dialog==='year'?'Add academic year':dialog==='class'?'Add a class':'Admit a student'}</h2><p>Records are saved to this school workspace.</p></div><button className="icon-button" onClick={()=>setDialog(null)}><X size={19}/></button></div>{dialog==='year'?<YearForm pending={addYear.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addYear.mutate(v)}/>:dialog==='class'?<ClassForm years={years.data?.items||[]} pending={addClass.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addClass.mutate(v)}/>:<StudentForm years={years.data?.items||[]} classes={classes.data?.items||[]} pending={addStudent.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addStudent.mutate(v)}/>}</section></div>}
   {/* Mobile Bottom Navigation Bar */}
   <nav className="school-bottom-nav" aria-label="Quick Mobile Navigation">

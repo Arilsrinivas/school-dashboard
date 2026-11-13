@@ -356,8 +356,22 @@ authRouter.post('/refresh', asyncRoute(async (req,res) => {
     if (!session || !session.active || session.revoked_at || new Date(session.expires_at)<=new Date() || session.refresh_token_hash!==hashRefresh(secret)) fail(401,'Refresh session is expired or revoked');
     let schoolId: string|undefined,role:string=session.platform_role;
     if (session.user_kind==='school') {
-      const membership=await tenantTransaction(session.school_id,tenantClient=>tenantClient.query("SELECT m.role FROM school_memberships m JOIN schools s ON s.id=m.school_id WHERE m.user_id=$1 AND m.school_id=$2 AND m.is_active AND s.status='active' AND EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.school_id=s.id AND sub.status IN ('active','trialing') AND (sub.expires_at IS NULL OR sub.expires_at>now() OR sub.grace_until>now()))",[session.user_id,session.school_id]));
-      if (!membership.rows[0]) fail(401,'School access is unavailable'); schoolId=session.school_id;role=membership.rows[0].role;
+      const membership = await client.query(
+        `SELECT m.role 
+         FROM school_memberships m 
+         JOIN schools s ON s.id=m.school_id 
+         WHERE m.user_id=$1 AND m.school_id=$2 AND m.is_active AND s.status='active' 
+           AND EXISTS(
+             SELECT 1 FROM subscriptions sub 
+             WHERE sub.school_id=s.id 
+               AND sub.status IN ('active','trialing') 
+               AND (sub.expires_at IS NULL OR sub.expires_at>now() OR sub.grace_until>now())
+           )`,
+        [session.user_id, session.school_id]
+      );
+      if (!membership.rows[0]) fail(401,'School access is unavailable');
+      schoolId = session.school_id;
+      role = membership.rows[0].role;
     }
     const nextId=crypto.randomUUID(), nextSecret=newRefreshSecret();
     await client.query('INSERT INTO user_sessions(id,user_kind,user_id,school_id,refresh_token_hash,expires_at) VALUES($1,$2,$3,$4,$5,now()+($6 || \' days\')::interval)',[nextId,session.user_kind,session.user_id,session.school_id,hashRefresh(nextSecret),env.REFRESH_TOKEN_TTL_DAYS]);
@@ -420,7 +434,6 @@ export async function sendAccountRecovery(email:string,token:string){const url=n
 
 authRouter.post('/recovery/request',asyncRoute(async(req,res)=>{
   const data=z.object({kind:z.enum(['platform','school']),email:z.email().max(254),schoolId:z.string().min(1).max(40).optional()}).parse(req.body);
-  if(data.kind==='school'&&!data.schoolId)fail(400,'School ID is required for school account recovery');
   if(data.kind==='platform'&&data.schoolId)fail(400,'School ID is not used for platform recovery');
   let account:{id:string;email:string;schoolId?:string}|undefined;
   let schoolRow:{id:string;school_id:string;name:string}|undefined;
@@ -429,11 +442,41 @@ authRouter.post('/recovery/request',asyncRoute(async(req,res)=>{
     const found=await platformPool.query('SELECT id,email FROM platform_users WHERE lower(email)=lower($1) AND is_active',[data.email]);
     if(found.rows[0])account={id:found.rows[0].id,email:found.rows[0].email};
   } else {
-    const school=await platformPool.query("SELECT id,school_id,name FROM schools WHERE school_id=$1 AND status='active' AND deleted_at IS NULL",[data.schoolId]);
-    if(school.rows[0]){
-      schoolRow=school.rows[0];
-      const found=await tenantTransaction(school.rows[0].id,client=>client.query('SELECT u.id,u.email FROM users u JOIN school_memberships m ON m.user_id=u.id WHERE lower(u.email)=lower($1) AND u.is_active AND m.is_active LIMIT 1',[data.email]));
-      if(found.rows[0])account={id:found.rows[0].id,email:found.rows[0].email,schoolId:school.rows[0].id};
+    // 1. If schoolId was provided, attempt direct match
+    if(data.schoolId){
+      const school=await platformPool.query("SELECT id,school_id,name FROM schools WHERE (school_id=$1 OR id::text=$1) AND status='active' AND deleted_at IS NULL",[data.schoolId]);
+      if(school.rows[0]){
+        schoolRow=school.rows[0];
+        const found=await platformPool.query(
+          `SELECT u.id, u.email 
+           FROM users u 
+           JOIN school_memberships m ON m.user_id=u.id 
+           WHERE m.school_id=$1 AND lower(u.email)=lower($2) AND u.is_active AND m.is_active 
+           LIMIT 1`,
+          [school.rows[0].id, data.email]
+        );
+        if(found.rows[0])account={id:found.rows[0].id,email:found.rows[0].email,schoolId:school.rows[0].id};
+      }
+    }
+
+    // 2. Fallback / Auto-resolution: If schoolId was omitted or wrong (e.g. CS-SCH-0001 demo leftover),
+    // search for the user's active membership across schools by email
+    if(!account){
+      const userLookup = await platformPool.query(
+        `SELECT u.id, u.email, m.school_id, s.school_id AS display_id, s.name AS school_name
+         FROM users u
+         JOIN school_memberships m ON m.user_id = u.id AND m.is_active
+         JOIN schools s ON s.id = m.school_id AND s.status = 'active' AND s.deleted_at IS NULL
+         WHERE lower(u.email) = lower($1) AND u.is_active
+         ORDER BY m.created_at DESC
+         LIMIT 1`,
+        [data.email]
+      );
+      if(userLookup.rows[0]){
+        const row = userLookup.rows[0];
+        account = { id: row.id, email: row.email, schoolId: row.school_id };
+        schoolRow = { id: row.school_id, school_id: row.display_id, name: row.school_name };
+      }
     }
   }
 
@@ -453,28 +496,49 @@ authRouter.post('/recovery/request',asyncRoute(async(req,res)=>{
       const inviteUrl = `${env.INVITATION_BASE_URL}?token=${rawToken}`;
       console.info(`[Auth] Pending invitation renewed for ${data.email}: ${inviteUrl}`);
       return res.json({
-        message: 'An invitation is pending for this account. Please complete your initial account setup to access the school.',
+        success: true,
+        message: `An invitation is pending for ${schoolRow.name}. Complete your initial setup to choose a password and enter your workspace.`,
+        schoolId: schoolRow.school_id,
+        schoolName: schoolRow.name,
         invitationUrl: inviteUrl,
         developmentUrl: inviteUrl,
       });
     }
   }
 
-  let developmentUrl:string|undefined;
-  if(account){
-    const raw=randomBytes(32).toString('base64url'),tokenHash=createHash('sha256').update(raw).digest('hex');
-    await platformPool.query('UPDATE account_recovery_tokens SET used_at=now() WHERE user_kind=$1 AND user_id=$2 AND used_at IS NULL',[data.kind,account.id]);
-    await platformPool.query("INSERT INTO account_recovery_tokens(user_kind,user_id,school_id,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+interval '30 minutes')",[data.kind,account.id,account.schoolId??null,tokenHash]);
-    await platformPool.query("INSERT INTO platform_audit_logs(action,target_type,target_id,metadata) VALUES('account_recovery.requested','user',$1,$2)",[account.id,JSON.stringify({kind:data.kind,schoolId:data.schoolId||null})]);
-    try{
-      await sendAccountRecovery(account.email,raw);
-      developmentUrl=`${env.RECOVERY_BASE_URL}?token=${raw}`;
-    }catch(error){
-      console.error('Account recovery delivery failed',error);
-      developmentUrl=`${env.RECOVERY_BASE_URL}?token=${raw}`;
-    }
+  if(!account){
+    return res.json({
+      success: false,
+      message: 'If the account is eligible, recovery instructions have been sent.',
+      notFound: true
+    });
   }
-  res.json({message:'If the account is eligible, recovery instructions have been sent.',...(developmentUrl?{developmentUrl}:{})});
+
+  const raw=randomBytes(32).toString('base64url'),tokenHash=createHash('sha256').update(raw).digest('hex');
+  await platformPool.query('UPDATE account_recovery_tokens SET used_at=now() WHERE user_kind=$1 AND user_id=$2 AND used_at IS NULL',[data.kind,account.id]);
+  await platformPool.query("INSERT INTO account_recovery_tokens(user_kind,user_id,school_id,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+interval '30 minutes')",[data.kind,account.id,account.schoolId??null,tokenHash]);
+  await platformPool.query("INSERT INTO platform_audit_logs(action,target_type,target_id,metadata) VALUES('account_recovery.requested','user',$1,$2)",[account.id,JSON.stringify({kind:data.kind,schoolId:schoolRow?.school_id||data.schoolId||null})]);
+
+  let emailDelivered = false;
+  const developmentUrl = `${env.RECOVERY_BASE_URL}?token=${raw}`;
+  try{
+    await sendAccountRecovery(account.email,raw);
+    emailDelivered = !!env.SMTP_HOST;
+  }catch(error){
+    console.error('Account recovery delivery failed',error);
+  }
+
+  const schoolNotice = schoolRow ? `${schoolRow.name} (${schoolRow.school_id})` : '';
+
+  return res.json({
+    success: true,
+    message: 'If the account is eligible, recovery instructions have been sent.',
+    schoolId: schoolRow?.school_id,
+    schoolName: schoolRow?.name,
+    schoolNotice,
+    developmentUrl,
+    emailDelivered
+  });
 }));
 
 authRouter.post('/recovery/confirm',asyncRoute(async(req,res)=>{
