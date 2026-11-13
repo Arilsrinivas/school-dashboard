@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Activity, ArrowDownRight, ArrowUpRight, Bell, Building2, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, CreditCard, Download, Filter, GraduationCap, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Users, X } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, Users, X } from 'lucide-react';
 import { acceptInvitation, exportCsv, login, logout, request, restoreSession, type School, type User } from './api';
 import AttendanceWorkspace from './AttendanceWorkspace';
 import HomeworkWorkspace from './HomeworkWorkspace';
@@ -158,7 +158,15 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
   ];
 
   const defaultTab: SchoolTab = admin ? 'overview' : (canAttendance ? 'attendance' : (canHomework ? 'homework' : (canExams ? 'exams' : (canTimetable ? 'timetable' : (canFees ? 'fees' : (canAnnouncements ? 'announcements' : (canReports ? 'reports' : (canSettings ? 'settings' : (canAccess ? 'access' : 'overview')))))))));
-  const [tab,setTab]=useState<SchoolTab>(defaultTab),[dialog,setDialog]=useState<'year'|'class'|'student'|null>(null),[studentPage,setStudentPage]=useState(1),[studentSearch,setStudentSearch]=useState(''),[bulkTarget,setBulkTarget]=useState(''),[bulkError,setBulkError]=useState('');const qc=useQueryClient();
+  const [tab,setTab]=useState<SchoolTab>(defaultTab);
+  const [mobileMenuOpen, setMobileMenuOpen]=useState(false);
+  const [dialog,setDialog]=useState<'year'|'class'|'student'|null>(null);
+  const [studentPage,setStudentPage]=useState(1);
+  const [studentSearch,setStudentSearch]=useState('');
+  const [bulkTarget,setBulkTarget]=useState('');
+  const [bulkError,setBulkError]=useState('');
+  const qc=useQueryClient();
+
   const q=useQuery({queryKey:['school-dashboard'],queryFn:()=>request<{metrics:{students:number;teachers:number;parents:number;attendance_marked:number};currentAcademicYear:{name:string}|null}>('/api/school/dashboard')});
   const years=useQuery({queryKey:['academic-years'],queryFn:()=>request<{items:AcademicYear[]}>('/api/school/academic-years'),enabled:user.permissions?.some(p=>p==='academics:read'||p==='academics:read:assigned')&&(tab==='classes'||tab==='students')});
   const classes=useQuery({queryKey:['school-classes',years.data?.items[0]?.id],queryFn:()=>request<{items:ClassItem[]}>('/api/school/classes'),enabled:user.permissions?.some(p=>p==='academics:read'||p==='academics:read:assigned')&&(tab==='classes'||tab==='students')});
@@ -186,9 +194,198 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
     }
   };
 
-  return <main className="school-app"><header className="school-top"><div className="brand"><div className="brand-mark"><GraduationCap size={19}/></div><span>educonnect<small>SCHOOL WORKSPACE</small></span></div><div className="school-top-actions"><NotificationBell onOpenAnnouncements={()=>setTab('announcements')}/><StatusBadge status="active"/><div className="top-avatar">{initials(user.name)}</div><button className="btn btn-secondary small-btn" onClick={onLogout}><LogOut size={14}/> Sign out</button></div></header><section className="school-welcome"><div className="eyebrow">SCHOOL WORKSPACE <span className="heading-dash">/</span> {(user.schoolRoleName||user.schoolRole||user.role).toUpperCase()}</div><h1>Welcome, {user.name.split(' ')[0]}.</h1><p>Your school overview is ready. School ID <b>{user.schoolId}</b>{q.data?.currentAcademicYear&&<> · Academic year {q.data.currentAcademicYear.name}</>}</p></section>{tabs.length>0&&<div className="school-workbar"><div className="school-tabs">{tabs.map(item=><button key={item} className={tab===item?'selected':''} onClick={()=>setTab(item)}>{getTabLabel(item)}</button>)}</div><div className="school-actions">{tab==='classes'&&user.permissions?.includes('academics:manage')&&<button className="btn btn-secondary" onClick={()=>setDialog('year')}><Plus size={15}/> Academic year</button>}{tab==='classes'&&user.permissions?.includes('academics:manage')&&<button className="btn btn-primary" onClick={()=>setDialog('class')} disabled={!years.data?.items.length}><Plus size={15}/> Add class</button>}{tab==='students'&&user.permissions?.includes('students:admit')&&<button className="btn btn-primary" onClick={()=>setDialog('student')} disabled={!years.data?.items.length||!classes.data?.items.length}><Plus size={15}/> Admit student</button>}{tab==='students'&&user.permissions?.includes('students:admit')&&<><select className="bulk-target" value={bulkTarget} onChange={e=>setBulkTarget(e.target.value)}><option value="">Choose import class</option>{classes.data?.items.map(item=><option key={item.id} value={`${item.id}|${item.academic_year_id}`}>{item.name} · {item.academic_year_name}</option>)}</select><label className="btn btn-secondary csv-upload">Import CSV<input type="file" accept=".csv,text/csv" onChange={async e=>{const file=e.target.files?.[0];if(!file)return;setBulkError('');try{const target=(bulkTarget||`${classes.data?.items[0]?.id||''}|${classes.data?.items[0]?.academic_year_id||''}`).split('|');if(!target[0]||!target[1])throw new Error('Choose a class before importing.');const records=parseStudentCsv(await file.text()).map(row=>({...row,classId:target[0],academicYearId:target[1]}));if(!records.length)throw new Error('CSV has no student rows.');await bulkImport.mutateAsync(records);}catch(ex){setBulkError((ex as Error).message);}finally{e.target.value='';}}}/></label></>}</div></div>}
+  const getTabIcon = (item: SchoolTab) => {
+    switch (item) {
+      case 'overview': return LayoutDashboard;
+      case 'classes': return Layers;
+      case 'students': return GraduationCap;
+      case 'attendance': return CalendarCheck;
+      case 'homework': return FileText;
+      case 'exams': return Award;
+      case 'timetable': return Clock;
+      case 'fees': return Receipt;
+      case 'announcements': return Bell;
+      case 'reports': return BarChart3;
+      case 'settings': return Settings;
+      case 'access': return ShieldCheck;
+      default: return LayoutDashboard;
+    }
+  };
+
+  const bottomTabs = useMemo(() => {
+    const preferred: SchoolTab[] = ['overview', 'attendance', 'homework', 'exams', 'timetable', 'fees', 'announcements', 'reports'];
+    const matched = preferred.filter(t => tabs.includes(t));
+    return matched.slice(0, 4);
+  }, [tabs]);
+
+  return <main className="school-app">
+    <header className="school-top">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        <button 
+          type="button" 
+          className="icon-button school-mobile-menu" 
+          onClick={() => setMobileMenuOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={20} />
+        </button>
+        <div className="brand" style={{ minWidth: 0 }}>
+          <div className="brand-mark"><GraduationCap size={19}/></div>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            educonnect
+            <small className="mobile-hide-sub">SCHOOL WORKSPACE</small>
+          </span>
+        </div>
+      </div>
+      <div className="school-top-actions">
+        <NotificationBell onOpenAnnouncements={() => { setTab('announcements'); setMobileMenuOpen(false); }} />
+        <div className="status-badge-wrap"><StatusBadge status="active"/></div>
+        <div className="top-avatar" title={user.name}>{initials(user.name)}</div>
+        <button className="btn btn-secondary small-btn logout-btn" onClick={onLogout}>
+          <LogOut size={14}/> <span>Sign out</span>
+        </button>
+      </div>
+    </header>
+
+    {/* Mobile Slide-over Drawer */}
+    {mobileMenuOpen && (
+      <div className="mobile-drawer-overlay" onClick={() => setMobileMenuOpen(false)}>
+        <aside className="mobile-drawer" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-drawer-header">
+            <div className="brand">
+              <div className="brand-mark"><GraduationCap size={20}/></div>
+              <div>
+                <strong style={{ fontSize: '15px', color: '#17251f', display: 'block' }}>educonnect</strong>
+                <div style={{ fontSize: '10px', color: '#64748b' }}>School Workspace</div>
+              </div>
+            </div>
+            <button type="button" className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="mobile-drawer-user">
+            <div className="avatar" style={{ width: '40px', height: '40px', fontSize: '13px' }}>
+              {initials(user.name)}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong style={{ display: 'block', fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.name}
+              </strong>
+              <span style={{ display: 'inline-block', fontSize: '10px', color: '#15803d', background: '#dcfce7', padding: '2px 8px', borderRadius: '12px', marginTop: '2px', fontWeight: 600 }}>
+                {user.schoolRoleName || user.schoolRole || user.role}
+              </span>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                School ID: <b>{user.schoolId}</b>
+              </div>
+            </div>
+          </div>
+
+          <div className="mobile-drawer-nav">
+            <div className="side-label" style={{ padding: '8px 12px 4px', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: '#94a3b8' }}>
+              MODULES & WORKSPACES
+            </div>
+            {tabs.map((item) => {
+              const Icon = getTabIcon(item);
+              const active = tab === item;
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  className={`mobile-drawer-item ${active ? 'active' : ''}`}
+                  onClick={() => {
+                    setTab(item);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <span className="mobile-drawer-icon"><Icon size={18} /></span>
+                  <span style={{ flex: 1, textAlign: 'left', fontWeight: active ? 700 : 500 }}>
+                    {getTabLabel(item)}
+                  </span>
+                  {active && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mobile-drawer-footer">
+            <button type="button" className="mobile-drawer-logout" onClick={onLogout}>
+              <LogOut size={16} />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </aside>
+      </div>
+    )}
+
+    <section className="school-welcome">
+      <div className="eyebrow">SCHOOL WORKSPACE <span className="heading-dash">/</span> {(user.schoolRoleName||user.schoolRole||user.role).toUpperCase()}</div>
+      <h1>Welcome, {user.name.split(' ')[0]}.</h1>
+      <p>Your school overview is ready. School ID <b>{user.schoolId}</b>{q.data?.currentAcademicYear&&<> · Academic year {q.data.currentAcademicYear.name}</>}</p>
+    </section>
+
+    {tabs.length>0&&<div className="school-workbar">
+      <div className="school-tabs-scroll">
+        <div className="school-tabs" role="tablist">
+          {tabs.map(item => {
+            const Icon = getTabIcon(item);
+            return (
+              <button 
+                key={item} 
+                role="tab"
+                aria-selected={tab===item}
+                className={tab===item?'selected':''} 
+                onClick={()=>setTab(item)}
+              >
+                <Icon size={14} className="tab-icon" />
+                <span>{getTabLabel(item)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="school-actions">
+        {tab==='classes'&&user.permissions?.includes('academics:manage')&&<button className="btn btn-secondary" onClick={()=>setDialog('year')}><Plus size={15}/> Academic year</button>}
+        {tab==='classes'&&user.permissions?.includes('academics:manage')&&<button className="btn btn-primary" onClick={()=>setDialog('class')} disabled={!years.data?.items.length}><Plus size={15}/> Add class</button>}
+        {tab==='students'&&user.permissions?.includes('students:admit')&&<button className="btn btn-primary" onClick={()=>setDialog('student')} disabled={!years.data?.items.length||!classes.data?.items.length}><Plus size={15}/> Admit student</button>}
+        {tab==='students'&&user.permissions?.includes('students:admit')&&<>
+          <select className="bulk-target" value={bulkTarget} onChange={e=>setBulkTarget(e.target.value)}>
+            <option value="">Choose import class</option>
+            {classes.data?.items.map(item=><option key={item.id} value={`${item.id}|${item.academic_year_id}`}>{item.name} · {item.academic_year_name}</option>)}
+          </select>
+          <label className="btn btn-secondary csv-upload">Import CSV<input type="file" accept=".csv,text/csv" onChange={async e=>{const file=e.target.files?.[0];if(!file)return;setBulkError('');try{const target=(bulkTarget||`${classes.data?.items[0]?.id||''}|${classes.data?.items[0]?.academic_year_id||''}`).split('|');if(!target[0]||!target[1])throw new Error('Choose a class before importing.');const records=parseStudentCsv(await file.text()).map(row=>({...row,classId:target[0],academicYearId:target[1]}));if(!records.length)throw new Error('CSV has no student rows.');await bulkImport.mutateAsync(records);}catch(ex){setBulkError((ex as Error).message);}finally{e.target.value='';}}}/></label>
+        </>}
+      </div>
+    </div>}
   {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<div className="metric-grid school-metrics">{[['Students',q.data?.metrics.students],['Teachers',q.data?.metrics.teachers],['Parents',q.data?.metrics.parents],['Attendance recorded today',q.data?.metrics.attendance_marked]].map(([label,value])=><div className="metric-card" key={label as string}><div className="metric-top">{label}</div><div className="metric-value">{q.isLoading?<div className="skeleton number-skeleton"/>:formatNumber(Number(value||0))}</div></div>)}</div>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
-  {(bulkError||addYear.isError||addClass.isError||addStudent.isError||bulkImport.isError)&&<div className="error-inline school-error">{bulkError||((addYear.error||addClass.error||addStudent.error||bulkImport.error) as Error).message}</div>}{dialog&&<div className="modal-backdrop"><section className="modal school-modal"><div className="modal-head"><div><div className="eyebrow">SCHOOL SETUP</div><h2>{dialog==='year'?'Add academic year':dialog==='class'?'Add a class':'Admit a student'}</h2><p>Records are saved to this school workspace.</p></div><button className="icon-button" onClick={()=>setDialog(null)}><X size={19}/></button></div>{dialog==='year'?<YearForm pending={addYear.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addYear.mutate(v)}/>:dialog==='class'?<ClassForm years={years.data?.items||[]} pending={addClass.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addClass.mutate(v)}/>:<StudentForm years={years.data?.items||[]} classes={classes.data?.items||[]} pending={addStudent.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addStudent.mutate(v)}/>}</section></div>}</main>;
+  {(bulkError||addYear.isError||addClass.isError||addStudent.isError||bulkImport.isError)&&<div className="error-inline school-error">{bulkError||((addYear.error||addClass.error||addStudent.error||bulkImport.error) as Error).message}</div>}{dialog&&<div className="modal-backdrop"><section className="modal school-modal"><div className="modal-head"><div><div className="eyebrow">SCHOOL SETUP</div><h2>{dialog==='year'?'Add academic year':dialog==='class'?'Add a class':'Admit a student'}</h2><p>Records are saved to this school workspace.</p></div><button className="icon-button" onClick={()=>setDialog(null)}><X size={19}/></button></div>{dialog==='year'?<YearForm pending={addYear.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addYear.mutate(v)}/>:dialog==='class'?<ClassForm years={years.data?.items||[]} pending={addClass.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addClass.mutate(v)}/>:<StudentForm years={years.data?.items||[]} classes={classes.data?.items||[]} pending={addStudent.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addStudent.mutate(v)}/>}</section></div>}
+  {/* Mobile Bottom Navigation Bar */}
+  <nav className="school-bottom-nav" aria-label="Quick Mobile Navigation">
+    {bottomTabs.map((item) => {
+      const Icon = getTabIcon(item);
+      const active = tab === item;
+      return (
+        <button
+          key={item}
+          type="button"
+          className={`bottom-nav-item ${active ? 'active' : ''}`}
+          onClick={() => setTab(item)}
+        >
+          <Icon size={18} />
+          <span>{getTabLabel(item)}</span>
+        </button>
+      );
+    })}
+    <button
+      type="button"
+      className={`bottom-nav-item ${mobileMenuOpen ? 'active' : ''}`}
+      onClick={() => setMobileMenuOpen(true)}
+    >
+      <Menu size={18} />
+      <span>Menu</span>
+    </button>
+  </nav>
+</main>;
 }
 
 function parseStudentCsv(text:string):Record<string,string>[]{
