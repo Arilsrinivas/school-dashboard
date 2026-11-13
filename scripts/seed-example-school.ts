@@ -364,30 +364,41 @@ async function seed() {
 
     // Marks
     await pool.query(
-      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade)
-       VALUES ($1, $2, $3, 92.00, 'A')
-       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 92.00, grade = 'A'`,
+      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade, published_at)
+       VALUES ($1, $2, $3, 92.00, 'A', now())
+       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 92.00, grade = 'A', published_at = now()`,
       [schoolId, esPhysics.id, stJohn]
     );
     await pool.query(
-      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade)
-       VALUES ($1, $2, $3, 96.00, 'A')
-       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 96.00, grade = 'A'`,
+      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade, published_at)
+       VALUES ($1, $2, $3, 96.00, 'A', now())
+       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 96.00, grade = 'A', published_at = now()`,
       [schoolId, esMath.id, stJohn]
     );
     await pool.query(
-      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade)
-       VALUES ($1, $2, $3, 78.00, 'B')
-       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 78.00, grade = 'B'`,
+      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade, published_at)
+       VALUES ($1, $2, $3, 78.00, 'B', now())
+       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 78.00, grade = 'B', published_at = now()`,
       [schoolId, esPhysics.id, stJane]
     );
     await pool.query(
-      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade)
-       VALUES ($1, $2, $3, 85.00, 'A')
-       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 85.00, grade = 'A'`,
+      `INSERT INTO examination_results (school_id, examination_subject_id, student_id, marks, grade, published_at)
+       VALUES ($1, $2, $3, 85.00, 'A', now())
+       ON CONFLICT (school_id, examination_subject_id, student_id) DO UPDATE SET marks = 85.00, grade = 'A', published_at = now()`,
       [schoolId, esPhysics.id, stAlex]
     );
-    console.log('[Seed] Examination and marks seeded.');
+
+    // Published Report Cards
+    await pool.query(
+      `INSERT INTO report_cards (school_id, student_id, examination_id, published_at)
+       SELECT DISTINCT $1::uuid, r.student_id, $2::uuid, now()
+       FROM examination_results r
+       JOIN examination_subjects es ON es.school_id = r.school_id AND es.id = r.examination_subject_id
+       WHERE r.school_id = $1 AND es.examination_id = $2
+       ON CONFLICT (school_id, student_id, examination_id) DO UPDATE SET published_at = now()`,
+      [schoolId, examId]
+    );
+    console.log('[Seed] Examination, marks, and published report cards seeded.');
 
     // 15. Timetable (Gate D)
     async function upsertPeriod(num: number, name: string, starts: string, ends: string, isBreak = false) {

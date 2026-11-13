@@ -1,4 +1,6 @@
-const API=(import.meta.env.VITE_API_URL as string|undefined)||'http://localhost:4000';
+const API = import.meta.env.VITE_API_URL !== undefined
+  ? (import.meta.env.VITE_API_URL as string)
+  : (import.meta.env.PROD ? '' : 'http://localhost:4000');
 let accessToken:string|null=null;
 export function setAccessToken(token:string|null){accessToken=token;}
 export function getAccessToken(){return accessToken;}

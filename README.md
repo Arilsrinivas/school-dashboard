@@ -59,9 +59,31 @@ npm test
 # Run full 14-phase end-to-end production lifecycle test
 npm run test:e2e
 
+# Run the live multi-role school operational simulation (Admin, Teacher, Student, Parent)
+npx tsx scripts/school-lifecycle-runner.ts
+
 # Build production assets for both backend and frontend
 npm run build
 ```
+
+## Production Deployment
+
+EduConnect is fully containerized and production-ready with multi-stage Docker builds, Nginx reverse proxying, and healthchecks.
+
+### Single-Command Production Launch:
+```bash
+# 1. Copy production environment template
+cp .env.production.example .env
+
+# 2. Launch complete production stack (Database, Redis, API, and Web SPA)
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Verify health
+curl http://localhost:4000/health
+curl http://localhost/health
+```
+
+For complete documentation on cloud deployments (Render, Railway, VPS, AWS/GCP), SSL termination, database backups, and environment configurations, refer to the [Production Deployment Guide](docs/deployment-guide.md).
 
 ## Security & Multi-Tenant Isolation
 

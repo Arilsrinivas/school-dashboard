@@ -38,7 +38,7 @@ async function canAccessClass(client: import('../db/pool.js').DbClient, req: imp
     JOIN teacher_assignments ta ON ta.school_id=t.school_id AND ta.teacher_id=t.id
     JOIN class_subjects cs ON cs.school_id=ta.school_id AND cs.id=ta.class_subject_id
     WHERE t.school_id=$1 AND t.user_id=$2 AND t.employment_status='active' AND cs.class_id=$3
-      AND (ta.section_id IS NULL OR ta.section_id IS NOT DISTINCT FROM $4::uuid)
+      AND ($4::uuid IS NULL OR ta.section_id IS NULL OR ta.section_id = $4::uuid)
     LIMIT 1`,[req.tenant!.id,req.identity!.id,classId,sectionId ?? null]);
   if (!assigned.rowCount) fail(403,'Class is outside your assigned teaching scope');
 }
