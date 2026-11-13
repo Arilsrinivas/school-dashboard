@@ -15,7 +15,8 @@
     "test": "npm run test --workspace apps/api",
     "test:e2e": "npm --workspace apps/api run test:e2e",
     "db:migrate": "npm --workspace apps/api run db:migrate",
-    "db:bootstrap-admin": "npm --workspace apps/api run db:bootstrap-admin"
+    "db:bootstrap-admin": "npm --workspace apps/api run db:bootstrap-admin",
+    "db:clean-demo": "tsx scripts/clean-demo-data.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.13",
