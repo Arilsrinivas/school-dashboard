@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, Users, X } from 'lucide-react';
-import { acceptInvitation, exportCsv, login, logout, request, restoreSession, type School, type User } from './api';
+import { acceptInvitation, exportCsv, login, loginWithGoogle, logout, registerSchool, request, restoreSession, type School, type User } from './api';
 import AttendanceWorkspace from './AttendanceWorkspace';
 import HomeworkWorkspace from './HomeworkWorkspace';
 import ExamsWorkspace from './ExamsWorkspace';
@@ -29,13 +29,389 @@ export default function App(){
   if(window.location.pathname==='/accept-invitation')return <InvitationPage/>;
   if(window.location.pathname==='/recover-account')return <RecoveryPage/>;
   if(!ready)return <div className="grid min-h-screen place-items-center text-sm text-muted">Opening your workspace…</div>;
-  return user?(user.role==='super_admin'?<ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>:user.role==='support_agent'?<SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>:<SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>):<Login onLogin={setUser}/>;
+  return user?(user.role==='super_admin'?<ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>:user.role==='support_agent'?<SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>:<SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>):<AuthPortal onLogin={setUser}/>;
 }
 
-function Login({onLogin}:{onLogin:(u:User)=>void}){
-  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[schoolId,setSchoolId]=useState(''),[kind,setKind]=useState<'platform'|'school'>('platform'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
-  async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');try{onLogin(await login(email,password,kind==='school'?schoolId:undefined));}catch(ex){setError((ex as Error).message);}finally{setBusy(false);}}
-  return <main className="login-wrap"><section className="login-art"><div className="brand inverse"><div className="brand-mark"><GraduationCap size={21}/></div><span>calmstacks<span className="brand-light"> educonnect</span></span></div><div className="art-copy"><div className="eyebrow-light"><span className="eyebrow-dot"/> PLATFORM CONTROL</div><h1>Good schools<br/>grow together.</h1><p>A quieter, clearer way to support every school in your network.</p><div className="art-mini"><div className="mini-avatar-row"><i>SC</i><i>AD</i><i>MK</i><i>+8</i></div><span>One connected education community</span></div></div><div className="art-footer"><span>CALMSTACKS / EDUCATION</span><span>01 — 05</span></div></section><section className="login-panel"><div className="login-form-wrap"><div className="mobile-brand brand"><div className="brand-mark"><GraduationCap size={20}/></div><span>calmstacks <b>educonnect</b></span></div><div className="eyebrow">SECURE SIGN IN</div><h2>Welcome back</h2><p className="subtle">{kind==='platform'?'Sign in to the CalmStacks platform workspace.':'Sign in to your school workspace.'}</p><div className="auth-switch"><button className={kind==='platform'?'selected':''} onClick={()=>setKind('platform')}>Platform team</button><button className={kind==='school'?'selected':''} onClick={()=>setKind('school')}>School account</button></div><form onSubmit={submit} className="form-stack">{kind==='school'&&<label>School ID<input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0001" required/></label>}<label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="username" required/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" required/></label>{error&&<div className="error-banner">{error}</div>}<button className="btn btn-primary btn-wide" disabled={busy}>{busy?'Signing in…':'Sign in'}<ChevronRight size={17}/></button></form><div className="recovery-link"><a href={`/recover-account?kind=${kind}${schoolId?`&schoolId=${encodeURIComponent(schoolId)}`:''}`}>Forgot password?</a></div><div className="login-note"><ShieldCheck size={16}/> Protected by role and school access controls</div></div><div className="login-bottom"><span>© 2026 CalmStacks</span><a href="mailto:support@calmstacks.example" className="quiet-link"><CircleHelp size={14}/> Need help? Contact support</a></div></section></main>;
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" style={{ flexShrink: 0 }}>
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+    </svg>
+  );
+}
+
+function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
+  const [mode, setMode] = useState<'register' | 'login'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'login') return 'login';
+    if (params.get('mode') === 'register') return 'register';
+    return localStorage.getItem('educonnect_has_account') ? 'login' : 'register';
+  });
+
+  // Login form state
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginSchoolId, setLoginSchoolId] = useState('');
+  const [kind, setKind] = useState<'platform' | 'school'>('school');
+
+  // Register form state
+  const [schoolName, setSchoolName] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+
+  // Google modal state
+  const [googleOpen, setGoogleOpen] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('arilsrinivas8@gmail.com');
+  const [googleName, setGoogleName] = useState('Aril Srinivas');
+  const [googleSchoolName, setGoogleSchoolName] = useState('');
+
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function handleLoginSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const u = await login(loginEmail, loginPassword, kind === 'school' ? (loginSchoolId || undefined) : undefined);
+      localStorage.setItem('educonnect_has_account', 'true');
+      onLogin(u);
+    } catch (ex) {
+      setError((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRegisterSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const u = await registerSchool({
+        schoolName,
+        administratorName: adminName,
+        email: regEmail,
+        password: regPassword,
+      });
+      localStorage.setItem('educonnect_has_account', 'true');
+      onLogin(u);
+    } catch (ex) {
+      setError((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogleAuth(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const u = await loginWithGoogle({
+        email: googleEmail,
+        name: googleName,
+        schoolName: googleSchoolName || undefined,
+      });
+      localStorage.setItem('educonnect_has_account', 'true');
+      setGoogleOpen(false);
+      onLogin(u);
+    } catch (ex) {
+      setError((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="login-wrap">
+      <section className="login-art">
+        <div className="brand inverse">
+          <div className="brand-mark"><GraduationCap size={21} /></div>
+          <span>calmstacks<span className="brand-light"> educonnect</span></span>
+        </div>
+        <div className="art-copy">
+          <div className="eyebrow-light"><span className="eyebrow-dot" /> MODERN SCHOOL PLATFORM</div>
+          <h1 style={{ whiteSpace: 'pre-line' }}>{mode === 'register' ? 'Launch your school\nin seconds.' : 'Good schools\ngrow together.'}</h1>
+          <p>{mode === 'register' ? 'Set up an institutional workspace with automated grading, fees, student tracking, and parent circulars.' : 'A quieter, clearer way to manage every classroom, teacher, and student.'}</p>
+          <div className="art-mini">
+            <div className="mini-avatar-row"><i>SC</i><i>AD</i><i>MK</i><i>+8</i></div>
+            <span>Trusted by forward-looking schools</span>
+          </div>
+        </div>
+        <div className="art-footer">
+          <span>CALMSTACKS / EDUCATION</span>
+          <span>01 — 05</span>
+        </div>
+      </section>
+
+      <section className="login-panel">
+        <div className="login-form-wrap">
+          <div className="mobile-brand brand">
+            <div className="brand-mark"><GraduationCap size={20} /></div>
+            <span>calmstacks <b>educonnect</b></span>
+          </div>
+
+          <div className="auth-mode-toggle">
+            <button
+              type="button"
+              className={mode === 'register' ? 'active' : ''}
+              onClick={() => { setMode('register'); setError(''); }}
+            >
+              Register School
+            </button>
+            <button
+              type="button"
+              className={mode === 'login' ? 'active' : ''}
+              onClick={() => { setMode('login'); setError(''); }}
+            >
+              Sign In
+            </button>
+          </div>
+
+          <div className="eyebrow">{mode === 'register' ? 'NEW INSTITUTION' : 'SECURE SIGN IN'}</div>
+          <h2>{mode === 'register' ? 'Create school workspace' : 'Welcome back'}</h2>
+          <p className="subtle">
+            {mode === 'register'
+              ? 'Start with a verified school workspace in under 30 seconds.'
+              : 'Sign in to access your school or platform dashboard.'}
+          </p>
+
+          <button
+            type="button"
+            className="google-btn"
+            onClick={() => {
+              setError('');
+              setGoogleSchoolName(schoolName || (adminName ? `${adminName.split(' ')[0]}'s Academy` : 'Greenfield Academy'));
+              setGoogleOpen(true);
+            }}
+          >
+            <GoogleIcon />
+            <span>Continue with Google</span>
+          </button>
+
+          <div className="auth-divider">
+            <span>or {mode === 'register' ? 'register with email' : 'use credentials'}</span>
+          </div>
+
+          {mode === 'register' ? (
+            <form onSubmit={handleRegisterSubmit} className="form-stack">
+              <label>
+                School Name
+                <input
+                  value={schoolName}
+                  onChange={e => setSchoolName(e.target.value)}
+                  placeholder="e.g. Oakridge International Academy"
+                  required
+                  minLength={2}
+                />
+              </label>
+              <label>
+                Administrator Full Name
+                <input
+                  value={adminName}
+                  onChange={e => setAdminName(e.target.value)}
+                  placeholder="e.g. Dr. Sarah Jenkins"
+                  autoComplete="name"
+                  required
+                  minLength={2}
+                />
+              </label>
+              <label>
+                Work Email Address
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={e => setRegEmail(e.target.value)}
+                  placeholder="admin@oakridge.edu"
+                  autoComplete="username"
+                  required
+                />
+              </label>
+              <label>
+                Create Password
+                <input
+                  type="password"
+                  value={regPassword}
+                  onChange={e => setRegPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              </label>
+              {error && <div className="error-banner">{error}</div>}
+              <button className="btn btn-primary btn-wide" disabled={busy}>
+                {busy ? 'Creating school workspace…' : 'Create School Workspace'}
+                <ChevronRight size={17} />
+              </button>
+              <div style={{ marginTop: '0.4rem', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
+                Already registered?{' '}
+                <button
+                  type="button"
+                  style={{ border: 0, background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => { setMode('login'); setError(''); }}
+                >
+                  Sign in here
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="auth-switch">
+                <button
+                  type="button"
+                  className={kind === 'school' ? 'selected' : ''}
+                  onClick={() => setKind('school')}
+                >
+                  School account
+                </button>
+                <button
+                  type="button"
+                  className={kind === 'platform' ? 'selected' : ''}
+                  onClick={() => setKind('platform')}
+                >
+                  Platform team
+                </button>
+              </div>
+              <form onSubmit={handleLoginSubmit} className="form-stack">
+                {kind === 'school' && (
+                  <label>
+                    School ID <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional if using admin email)</span>
+                    <input
+                      value={loginSchoolId}
+                      onChange={e => setLoginSchoolId(e.target.value)}
+                      placeholder="e.g. CS-SCH-0001"
+                    />
+                  </label>
+                )}
+                <label>
+                  Email address
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={e => setLoginEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="username"
+                    required
+                  />
+                </label>
+                <label>
+                  Password
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </label>
+                {error && <div className="error-banner">{error}</div>}
+                <button className="btn btn-primary btn-wide" disabled={busy}>
+                  {busy ? 'Signing in…' : 'Sign in'}
+                  <ChevronRight size={17} />
+                </button>
+                <div style={{ marginTop: '0.4rem', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
+                  First time here?{' '}
+                  <button
+                    type="button"
+                    style={{ border: 0, background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                    onClick={() => { setMode('register'); setError(''); }}
+                  >
+                    Register your school
+                  </button>
+                </div>
+              </form>
+              <div className="recovery-link">
+                <a href={`/recover-account?kind=${kind}${loginSchoolId ? `&schoolId=${encodeURIComponent(loginSchoolId)}` : ''}`}>
+                  Forgot password?
+                </a>
+              </div>
+            </>
+          )}
+
+          <div className="login-note">
+            <ShieldCheck size={16} /> Protected by role and school access controls
+          </div>
+        </div>
+
+        <div className="login-bottom">
+          <span>© 2026 CalmStacks</span>
+          <a href="mailto:support@calmstacks.example" className="quiet-link">
+            <CircleHelp size={14} /> Need help? Contact support
+          </a>
+        </div>
+      </section>
+
+      {googleOpen && (
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setGoogleOpen(false); }}>
+          <section className="modal" style={{ maxWidth: '440px' }}>
+            <div className="modal-head">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <GoogleIcon />
+                <div>
+                  <h2 style={{ fontSize: '18px', margin: 0 }}>Sign in with Google</h2>
+                  <p style={{ fontSize: '11px', margin: 0, color: '#64748b' }}>to continue to CalmStacks EduConnect</p>
+                </div>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setGoogleOpen(false)}>
+                <X size={19} />
+              </button>
+            </div>
+            <form onSubmit={handleGoogleAuth} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.5 }}>
+                Choose or confirm your Google identity to instantly enter your dashboard:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+                  Google Full Name
+                  <input
+                    value={googleName}
+                    onChange={e => setGoogleName(e.target.value)}
+                    required
+                    style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
+                  />
+                </label>
+                <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+                  Google Email
+                  <input
+                    type="email"
+                    value={googleEmail}
+                    onChange={e => setGoogleEmail(e.target.value)}
+                    required
+                    style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
+                  />
+                </label>
+                <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+                  School Name <span style={{ fontWeight: 400, color: '#94a3b8' }}>(if creating a new school workspace)</span>
+                  <input
+                    value={googleSchoolName}
+                    onChange={e => setGoogleSchoolName(e.target.value)}
+                    placeholder="e.g. Oakridge Academy"
+                    style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
+                  />
+                </label>
+              </div>
+              {error && <div className="error-banner">{error}</div>}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setGoogleOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  {busy ? 'Authenticating…' : 'Continue with Google →'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+    </main>
+  );
 }
 
 function InvitationPage(){

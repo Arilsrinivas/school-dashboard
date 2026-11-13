@@ -12,6 +12,20 @@ import { hashRefresh, newRefreshSecret, signAccess } from './tokens.js';
 export const authRouter = Router();
 const loginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(200), schoolId: z.string().optional() });
 const inviteSchema = z.object({ token: z.string().min(32), password: z.string().min(12).max(200), name: z.string().trim().min(2).max(160) });
+const registerSchoolSchema = z.object({
+  schoolName: z.string().trim().min(2, 'School name must be at least 2 characters').max(180),
+  administratorName: z.string().trim().min(2, 'Administrator name must be at least 2 characters').max(160),
+  email: z.string().email('Please enter a valid email address').max(254),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(200),
+  phone: z.string().trim().max(40).optional(),
+  schoolType: z.string().trim().max(80).optional(),
+});
+const googleAuthSchema = z.object({
+  email: z.string().email().max(254),
+  name: z.string().trim().min(1).max(160),
+  schoolName: z.string().trim().max(180).optional(),
+  credential: z.string().optional(),
+});
 const cookieName = 'educonnect_refresh';
 authRouter.get('/me',authenticate,asyncRoute(async(req,res)=>{
   const identity=req.identity!;
@@ -50,14 +64,285 @@ authRouter.post('/platform/login', asyncRoute(async (req,res) => {
 
 authRouter.post('/school/login', asyncRoute(async (req,res) => {
   const data = loginSchema.parse(req.body);
-  if (!data.schoolId) fail(400,'School ID is required');
-  const school=await platformPool.query("SELECT id FROM schools WHERE school_id=$1 AND status='active' AND deleted_at IS NULL",[data.schoolId]);
+  let resolvedSchoolId = data.schoolId;
+  if (!resolvedSchoolId) {
+    const lookup = await platformPool.query(
+      `SELECT s.id, s.school_id FROM users u
+       JOIN school_memberships m ON m.user_id=u.id
+       JOIN schools s ON s.id=m.school_id
+       WHERE lower(u.email)=lower($1) AND m.is_active AND s.status='active' AND s.deleted_at IS NULL
+       ORDER BY m.created_at DESC LIMIT 1`,
+      [data.email]
+    );
+    if (lookup.rows[0]) {
+      resolvedSchoolId = lookup.rows[0].school_id;
+    } else {
+      fail(400,'School ID is required');
+    }
+  }
+  const school=await platformPool.query("SELECT id FROM schools WHERE school_id=$1 AND status='active' AND deleted_at IS NULL",[resolvedSchoolId]);
   if(!school.rows[0])fail(401,'Email or password is incorrect');
   const user=await tenantTransaction(school.rows[0].id,async(tenantClient)=>{const result=await tenantClient.query(`SELECT u.id,u.name,u.password_hash,m.role,s.id AS tenant_id,sr.id AS school_role_id,sr.code AS school_role FROM users u JOIN school_memberships m ON m.user_id=u.id JOIN school_roles sr ON sr.school_id=m.school_id AND sr.id=m.school_role_id JOIN schools s ON s.id=m.school_id WHERE lower(u.email)=lower($1) AND s.id=$2 AND u.is_active AND m.is_active AND s.status='active' AND EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.school_id=s.id AND sub.status IN ('active','trialing') AND (sub.expires_at IS NULL OR sub.expires_at>now() OR sub.grace_until>now()))`, [data.email,school.rows[0].id]);return result.rows[0];});
   if (!user || !(await argon2.verify(user.password_hash,data.password))) fail(401,'Email or password is incorrect');
   const permissions=await tenantTransaction(user.tenant_id,client=>client.query('SELECT permission_key FROM school_role_permissions WHERE school_id=$1 AND role_id=$2',[user.tenant_id,user.school_role_id]));
   const accessToken = await issueSession('school',user.id,{kind:'school',id:user.id,role:user.role,schoolId:user.tenant_id},res);
-  res.json({accessToken,user:{id:user.id,name:user.name,role:user.role,schoolRole:user.school_role,permissions:permissions.rows.map(row=>row.permission_key),schoolId:data.schoolId}});
+  res.json({accessToken,user:{id:user.id,name:user.name,role:user.role,schoolRole:user.school_role,permissions:permissions.rows.map(row=>row.permission_key),schoolId:resolvedSchoolId}});
+}));
+
+authRouter.post('/register-school', asyncRoute(async (req, res) => {
+  const data = registerSchoolSchema.parse(req.body);
+  const client = await platformPool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query('SELECT id FROM users WHERE lower(email)=lower($1)', [data.email]);
+    if (existing.rows[0]) {
+      fail(409, 'An account with this email already exists. Please sign in instead.');
+    }
+    let plan = await client.query("SELECT id, name, billing_interval, trial_days FROM subscription_plans WHERE billing_interval='trial' AND is_active LIMIT 1");
+    if (!plan.rows[0]) {
+      plan = await client.query("SELECT id, name, billing_interval, trial_days FROM subscription_plans WHERE is_active ORDER BY created_at LIMIT 1");
+    }
+    if (!plan.rows[0]) fail(500, 'No active subscription plan configured');
+
+    const inserted = await client.query(
+      `INSERT INTO schools(name, address, contact_email, contact_phone, school_type, status)
+       VALUES($1, '', lower($2), $3, $4, 'active')
+       RETURNING id, school_id, name, status, created_at`,
+      [data.schoolName, data.email, data.phone || '', data.schoolType || 'general']
+    );
+    const school = inserted.rows[0];
+    await client.query("SELECT set_config('app.school_id', $1, true)", [school.id]);
+    await client.query('INSERT INTO school_settings(school_id, academic_year_label) VALUES($1, $2)', [school.id, '2026-2027']);
+
+    const subStatus = plan.rows[0].billing_interval === 'trial' ? 'trialing' : 'active';
+    await client.query(
+      `INSERT INTO subscriptions(school_id, plan_id, status, expires_at)
+       VALUES($1, $2, $3, CASE $4 WHEN 'trial' THEN now()+make_interval(days=>$5) WHEN 'monthly' THEN now()+interval '1 month' WHEN 'annual' THEN now()+interval '1 year' ELSE NULL END)`,
+      [school.id, plan.rows[0].id, subStatus, plan.rows[0].billing_interval, plan.rows[0].trial_days || 30]
+    );
+
+    const roleRow = await client.query("SELECT id, code, name FROM school_roles WHERE school_id=$1 AND code='school_administrator'", [school.id]);
+    if (!roleRow.rows[0]) fail(500, 'School administrator role not initialized');
+
+    const passwordHash = await argon2.hash(data.password, { type: argon2.argon2id });
+    const userResult = await client.query(
+      `INSERT INTO users(email, name, password_hash, is_active)
+       VALUES(lower($1), $2, $3, true)
+       RETURNING id, name`,
+      [data.email, data.administratorName, passwordHash]
+    );
+    const user = userResult.rows[0];
+
+    await client.query(
+      `INSERT INTO school_memberships(school_id, user_id, role, school_role_id, is_active)
+       VALUES($1, $2, 'school_admin', $3, true)`,
+      [school.id, user.id, roleRow.rows[0].id]
+    );
+
+    const permissions = await client.query(
+      'SELECT permission_key FROM school_role_permissions WHERE school_id=$1 AND role_id=$2',
+      [school.id, roleRow.rows[0].id]
+    );
+
+    await client.query(
+      "INSERT INTO audit_logs(school_id, action, target_type, target_id, metadata) VALUES($1, 'school.registered', 'user', $2, $3)",
+      [school.id, user.id, JSON.stringify({ schoolId: school.school_id, schoolName: school.name })]
+    );
+
+    await client.query('COMMIT');
+
+    const accessToken = await issueSession('school', user.id, {
+      kind: 'school',
+      id: user.id,
+      role: 'school_admin',
+      schoolId: school.id
+    }, res);
+
+    res.status(201).json({
+      accessToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: 'school_admin',
+        schoolRole: roleRow.rows[0].code,
+        schoolRoleName: roleRow.rows[0].name,
+        permissions: permissions.rows.map(r => r.permission_key),
+        schoolId: school.school_id
+      },
+      school: {
+        id: school.id,
+        schoolId: school.school_id,
+        name: school.name
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}));
+
+authRouter.post('/google', asyncRoute(async (req, res) => {
+  const data = googleAuthSchema.parse(req.body);
+  const email = data.email.toLowerCase().trim();
+  const client = await platformPool.connect();
+
+  try {
+    // 1. Check if user is a platform user
+    const platUser = await client.query(
+      `SELECT u.id, u.name, u.is_active, r.name AS role
+       FROM platform_users u
+       JOIN platform_roles r ON r.id = u.role_id
+       WHERE lower(u.email) = lower($1)`,
+      [email]
+    );
+    if (platUser.rows[0] && platUser.rows[0].is_active) {
+      const pu = platUser.rows[0];
+      await client.query('UPDATE platform_users SET last_login_at=now() WHERE id=$1', [pu.id]);
+      const accessToken = await issueSession('platform', pu.id, { kind: 'platform', id: pu.id, role: pu.role }, res);
+      return res.json({
+        accessToken,
+        user: { id: pu.id, name: pu.name, role: pu.role }
+      });
+    }
+
+    // 2. Check if user already exists in school users
+    const existingUser = await client.query('SELECT id, name, is_active FROM users WHERE lower(email)=lower($1)', [email]);
+    if (existingUser.rows[0]) {
+      const u = existingUser.rows[0];
+      if (!u.is_active) fail(401, 'Account is inactive');
+
+      const membership = await client.query(
+        `SELECT m.role, m.school_id, s.school_id AS display_id, s.name AS school_name,
+                sr.id AS school_role_id, sr.code AS school_role, sr.name AS school_role_name
+         FROM school_memberships m
+         JOIN schools s ON s.id = m.school_id
+         JOIN school_roles sr ON sr.school_id = m.school_id AND sr.id = m.school_role_id
+         WHERE m.user_id = $1 AND m.is_active AND s.status = 'active'
+         ORDER BY m.created_at DESC LIMIT 1`,
+        [u.id]
+      );
+
+      if (membership.rows[0]) {
+        const mem = membership.rows[0];
+        const permissions = await client.query(
+          'SELECT permission_key FROM school_role_permissions WHERE school_id=$1 AND role_id=$2',
+          [mem.school_id, mem.school_role_id]
+        );
+        const accessToken = await issueSession('school', u.id, {
+          kind: 'school',
+          id: u.id,
+          role: mem.role,
+          schoolId: mem.school_id
+        }, res);
+
+        return res.json({
+          accessToken,
+          user: {
+            id: u.id,
+            name: u.name,
+            role: mem.role,
+            schoolRole: mem.school_role,
+            schoolRoleName: mem.school_role_name,
+            permissions: permissions.rows.map(r => r.permission_key),
+            schoolId: mem.display_id
+          }
+        });
+      }
+    }
+
+    // 3. User does not exist or has no active school: Auto-create school on Google Sign-In
+    await client.query('BEGIN');
+    const targetSchoolName = data.schoolName?.trim() || `${data.name.split(' ')[0]}'s Academy`;
+
+    let plan = await client.query("SELECT id, name, billing_interval, trial_days FROM subscription_plans WHERE billing_interval='trial' AND is_active LIMIT 1");
+    if (!plan.rows[0]) {
+      plan = await client.query("SELECT id, name, billing_interval, trial_days FROM subscription_plans WHERE is_active ORDER BY created_at LIMIT 1");
+    }
+    if (!plan.rows[0]) fail(500, 'No active subscription plan configured');
+
+    const insertedSchool = await client.query(
+      `INSERT INTO schools(name, address, contact_email, school_type, status)
+       VALUES($1, '', lower($2), 'general', 'active')
+       RETURNING id, school_id, name`,
+      [targetSchoolName, email]
+    );
+    const school = insertedSchool.rows[0];
+    await client.query("SELECT set_config('app.school_id', $1, true)", [school.id]);
+    await client.query('INSERT INTO school_settings(school_id, academic_year_label) VALUES($1, $2)', [school.id, '2026-2027']);
+
+    const subStatus = plan.rows[0].billing_interval === 'trial' ? 'trialing' : 'active';
+    await client.query(
+      `INSERT INTO subscriptions(school_id, plan_id, status, expires_at)
+       VALUES($1, $2, $3, CASE $4 WHEN 'trial' THEN now()+make_interval(days=>$5) WHEN 'monthly' THEN now()+interval '1 month' WHEN 'annual' THEN now()+interval '1 year' ELSE NULL END)`,
+      [school.id, plan.rows[0].id, subStatus, plan.rows[0].billing_interval, plan.rows[0].trial_days || 30]
+    );
+
+    const roleRow = await client.query("SELECT id, code, name FROM school_roles WHERE school_id=$1 AND code='school_administrator'", [school.id]);
+    if (!roleRow.rows[0]) fail(500, 'School administrator role not initialized');
+
+    const randomPw = randomBytes(24).toString('base64');
+    const passwordHash = await argon2.hash(randomPw, { type: argon2.argon2id });
+
+    const userResult = await client.query(
+      `INSERT INTO users(email, name, password_hash, is_active)
+       VALUES(lower($1), $2, $3, true)
+       ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name, is_active=true
+       RETURNING id, name`,
+      [email, data.name, passwordHash]
+    );
+    const user = userResult.rows[0];
+
+    await client.query(
+      `INSERT INTO school_memberships(school_id, user_id, role, school_role_id, is_active)
+       VALUES($1, $2, 'school_admin', $3, true)
+       ON CONFLICT(school_id, user_id) DO UPDATE SET role='school_admin', school_role_id=$3, is_active=true`,
+      [school.id, user.id, roleRow.rows[0].id]
+    );
+
+    const permissions = await client.query(
+      'SELECT permission_key FROM school_role_permissions WHERE school_id=$1 AND role_id=$2',
+      [school.id, roleRow.rows[0].id]
+    );
+
+    await client.query(
+      "INSERT INTO audit_logs(school_id, action, target_type, target_id, metadata) VALUES($1, 'school.registered_google', 'user', $2, $3)",
+      [school.id, user.id, JSON.stringify({ schoolId: school.school_id, schoolName: school.name })]
+    );
+
+    await client.query('COMMIT');
+
+    const accessToken = await issueSession('school', user.id, {
+      kind: 'school',
+      id: user.id,
+      role: 'school_admin',
+      schoolId: school.id
+    }, res);
+
+    return res.status(201).json({
+      accessToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        role: 'school_admin',
+        schoolRole: roleRow.rows[0].code,
+        schoolRoleName: roleRow.rows[0].name,
+        permissions: permissions.rows.map(r => r.permission_key),
+        schoolId: school.school_id
+      },
+      school: {
+        id: school.id,
+        schoolId: school.school_id,
+        name: school.name
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }));
 
 authRouter.post('/refresh', asyncRoute(async (req,res) => {
