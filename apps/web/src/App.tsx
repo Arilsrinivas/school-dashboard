@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, Users, X } from 'lucide-react';
 import { acceptInvitation, exportCsv, login, loginWithGoogle, logout, registerSchool, request, restoreSession, type School, type User } from './api';
+import { isFirebaseConfigured, signInWithFirebaseGoogle } from './firebase';
 import AttendanceWorkspace from './AttendanceWorkspace';
 import HomeworkWorkspace from './HomeworkWorkspace';
 import ExamsWorkspace from './ExamsWorkspace';
@@ -107,6 +108,38 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
     }
   }
 
+  async function handleGoogleClick() {
+    setError('');
+    const targetSchool = schoolName || (adminName ? `${adminName.split(' ')[0]}'s Academy` : 'Greenfield Academy');
+    setGoogleSchoolName(targetSchool);
+
+    if (isFirebaseConfigured()) {
+      setBusy(true);
+      try {
+        const fbUser = await signInWithFirebaseGoogle();
+        const u = await loginWithGoogle({
+          email: fbUser.email,
+          name: fbUser.name,
+          schoolName: targetSchool,
+          credential: fbUser.idToken,
+        });
+        localStorage.setItem('educonnect_has_account', 'true');
+        onLogin(u);
+        return;
+      } catch (ex) {
+        const err = ex as Error;
+        if (err.message !== 'FIREBASE_NOT_CONFIGURED') {
+          setError(err.message || 'Firebase Google sign-in failed');
+          return;
+        }
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    setGoogleOpen(true);
+  }
+
   async function handleGoogleAuth(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -184,11 +217,8 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
           <button
             type="button"
             className="google-btn"
-            onClick={() => {
-              setError('');
-              setGoogleSchoolName(schoolName || (adminName ? `${adminName.split(' ')[0]}'s Academy` : 'Greenfield Academy'));
-              setGoogleOpen(true);
-            }}
+            onClick={() => void handleGoogleClick()}
+            disabled={busy}
           >
             <GoogleIcon />
             <span>Continue with Google</span>
@@ -364,6 +394,10 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
               </button>
             </div>
             <form onSubmit={handleGoogleAuth} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '11px', color: '#64748b' }}>
+                <span>🔥 Firebase Auth Engine</span>
+                <span style={{ color: isFirebaseConfigured() ? '#16a34a' : '#0284c7', fontWeight: 600 }}>{isFirebaseConfigured() ? 'Connected' : 'Interactive OAuth Ready'}</span>
+              </div>
               <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.5 }}>
                 Choose or confirm your Google identity to instantly enter your dashboard:
               </div>
