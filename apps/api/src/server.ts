@@ -23,7 +23,20 @@ import { pool, platformPool } from './db/pool.js';
 export const app=express();
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({origin:env.WEB_ORIGIN,credentials:true,methods:['GET','POST','PATCH','DELETE'],allowedHeaders:['Content-Type','Authorization']}));
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests without origin (same-origin, curl, serverless internal)
+    if (!origin) return callback(null, true);
+    // Allow localhost, any vercel.app preview/production deployment, or configured WEB_ORIGIN
+    if (origin.includes('localhost') || origin.endsWith('.vercel.app') || origin === env.WEB_ORIGIN) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
 app.use(compression());
 app.use(express.json({limit:'1mb'}));
 app.get('/health',async(_req,res)=>{try{await pool.query('SELECT 1');res.json({status:'ok',database:'ok'});}catch{res.status(503).json({status:'unavailable',database:'unavailable'});}});
@@ -46,7 +59,16 @@ app.use((_req,res)=>res.status(404).json({error:'Not found'}));
 app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
   if(error instanceof HttpError)return res.status(error.status).json({error:error.message});
   if(error && typeof error==='object' && 'name' in error && error.name==='ZodError')return res.status(400).json({error:'Invalid request data',details:(error as {issues?:unknown}).issues});
-  if(error&&typeof error==='object'&&'code' in error){const code=(error as {code:string}).code;if(code==='23505')return res.status(409).json({error:'A record with those details already exists'});if(code==='23503'||code==='23514')return res.status(400).json({error:'The selected school record is not valid'});}
+  if(error&&typeof error==='object'&&'code' in error){
+    const code=(error as {code:string}).code;
+    if(code==='23505')return res.status(409).json({error:'A record with those details already exists'});
+    if(code==='23503'||code==='23514')return res.status(400).json({error:'The selected school record is not valid'});
+    if(code==='ECONNREFUSED'||code==='ETIMEDOUT')return res.status(503).json({error:'Database unavailable. On Vercel, connect a PostgreSQL database (e.g. Neon) in the Storage tab, or test on mobile via local network Wi-Fi.'});
+  }
+  const msg = (error as Error)?.message || '';
+  if (msg.includes('Connection terminated') || msg.includes('connection timeout')) {
+    return res.status(503).json({error:'Database unavailable. On Vercel, connect a PostgreSQL database (e.g. Neon) in the Storage tab, or test on mobile via local network Wi-Fi.'});
+  }
   console.error('Unhandled API error',error);return res.status(500).json({error:'Internal server error'});
 });
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){

@@ -1,12 +1,19 @@
 import pg from 'pg';
 import { env } from '../config.js';
 
+function getSslConfig(url: string) {
+  if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
+    return undefined;
+  }
+  return { rejectUnauthorized: false };
+}
+
 export const pool = new pg.Pool({
   connectionString: env.DATABASE_URL,
   max: 10,
   idleTimeoutMillis: 5_000,
   connectionTimeoutMillis: 10_000,
-  ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined
+  ssl: getSslConfig(env.DATABASE_URL)
 });
 
 export const platformPool = new pg.Pool({
@@ -14,7 +21,7 @@ export const platformPool = new pg.Pool({
   max: 5,
   idleTimeoutMillis: 5_000,
   connectionTimeoutMillis: 10_000,
-  ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined
+  ssl: getSslConfig(env.PLATFORM_DATABASE_URL)
 });
 
 pool.on('error', (err) => {
