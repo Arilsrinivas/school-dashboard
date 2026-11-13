@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
-import { acceptInvitation, exportCsv, login, loginWithGoogle, logout, registerSchool, request, restoreSession, type School, type User } from './api';
+import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, registerSchool, request, restoreSession, type School, type User, type GoogleAuthResult } from './api';
 import { isFirebaseConfigured, signInWithFirebaseGoogle } from './firebase';
 import AttendanceWorkspace from './AttendanceWorkspace';
 import HomeworkWorkspace from './HomeworkWorkspace';
@@ -64,14 +64,78 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
+  // Role context selector
+  const [selectedRole, setSelectedRole] = useState<'all' | 'admin' | 'teacher' | 'parent' | 'student'>('all');
+
   // Google modal state
   const [googleOpen, setGoogleOpen] = useState(false);
   const [googleEmail, setGoogleEmail] = useState('arilsrinivas8@gmail.com');
   const [googleName, setGoogleName] = useState('Aril Srinivas');
-  const [googleSchoolName, setGoogleSchoolName] = useState('');
+
+  // Account linking state (Requirement 4)
+  const [linkingState, setLinkingState] = useState<{ email: string; name: string; token: string } | null>(null);
+  const [linkingPassword, setLinkingPassword] = useState('');
+  const [linkingError, setLinkingError] = useState('');
+
+  // Multi-school selection state (Requirement 5)
+  const [multiSchoolState, setMultiSchoolState] = useState<{
+    token: string;
+    schools: Array<{ id: string; schoolId: string; name: string; role: string; schoolRole?: string; schoolRoleName?: string }>;
+  } | null>(null);
 
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  async function executeGoogleToken(token: string, schoolId?: string) {
+    setBusy(true);
+    setError('');
+    try {
+      const result: GoogleAuthResult = await loginWithGoogle({ credential: token, schoolId });
+      if (result.type === 'success') {
+        localStorage.setItem('educonnect_has_account', 'true');
+        setGoogleOpen(false);
+        setLinkingState(null);
+        setMultiSchoolState(null);
+        onLogin(result.user);
+      } else if (result.type === 'requiresLinking') {
+        setGoogleOpen(false);
+        setLinkingPassword('');
+        setLinkingError('');
+        setLinkingState({ email: result.email, name: result.name, token });
+      } else if (result.type === 'requireSchoolSelection') {
+        setGoogleOpen(false);
+        setMultiSchoolState({ token, schools: result.schools });
+      }
+    } catch (ex) {
+      setError((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLinkSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!linkingState) return;
+    setBusy(true);
+    setLinkingError('');
+    try {
+      const res = await linkGoogleAccount({
+        credential: linkingState.token,
+        password: linkingPassword,
+      });
+      if (res.user) {
+        localStorage.setItem('educonnect_has_account', 'true');
+        setLinkingState(null);
+        onLogin(res.user);
+      } else {
+        await executeGoogleToken(linkingState.token);
+      }
+    } catch (ex) {
+      setLinkingError((ex as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleLoginSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -110,22 +174,36 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
 
   async function handleGoogleClick() {
     setError('');
-    const targetSchool = schoolName || (adminName ? `${adminName.split(' ')[0]}'s Academy` : 'Greenfield Academy');
-    setGoogleSchoolName(targetSchool);
 
+    // 1. Check Google Identity Services
+    const googleGSI = (window as any).google?.accounts?.id;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (googleGSI && clientId) {
+      try {
+        googleGSI.initialize({
+          client_id: clientId,
+          callback: (resp: any) => {
+            if (resp?.credential) {
+              void executeGoogleToken(resp.credential);
+            }
+          },
+        });
+        googleGSI.prompt();
+        return;
+      } catch (e) {
+        console.warn('[Google GSI] prompt fallback:', e);
+      }
+    }
+
+    // 2. Check Firebase Auth
     if (isFirebaseConfigured()) {
       setBusy(true);
       try {
         const fbUser = await signInWithFirebaseGoogle();
-        const u = await loginWithGoogle({
-          email: fbUser.email,
-          name: fbUser.name,
-          schoolName: targetSchool,
-          credential: fbUser.idToken,
-        });
-        localStorage.setItem('educonnect_has_account', 'true');
-        onLogin(u);
-        return;
+        if (fbUser.idToken) {
+          await executeGoogleToken(fbUser.idToken);
+          return;
+        }
       } catch (ex) {
         const err = ex as Error;
         if (err.message !== 'FIREBASE_NOT_CONFIGURED') {
@@ -137,27 +215,20 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
       }
     }
 
+    // 3. Fallback: Interactive Google Sign-In Chooser
     setGoogleOpen(true);
   }
 
   async function handleGoogleAuth(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      const u = await loginWithGoogle({
-        email: googleEmail,
-        name: googleName,
-        schoolName: googleSchoolName || undefined,
-      });
-      localStorage.setItem('educonnect_has_account', 'true');
-      setGoogleOpen(false);
-      onLogin(u);
-    } catch (ex) {
-      setError((ex as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    const token = `test-google-token:${JSON.stringify({
+      sub: `google-${btoa(googleEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24)}`,
+      email: googleEmail.toLowerCase().trim(),
+      name: googleName,
+      email_verified: true,
+      iss: 'https://accounts.google.com',
+    })}`;
+    await executeGoogleToken(token);
   }
 
   return (
@@ -206,11 +277,53 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
             </button>
           </div>
 
-          <div className="eyebrow">{mode === 'register' ? 'NEW INSTITUTION' : 'SECURE SIGN IN'}</div>
-          <h2>{mode === 'register' ? 'Create school workspace' : 'Welcome back'}</h2>
+          {mode === 'login' && (
+            <div className="role-pills-row" style={{ marginTop: '10px', marginBottom: '14px' }}>
+              <button type="button" className={`role-pill ${selectedRole === 'all' ? 'active' : ''}`} onClick={() => setSelectedRole('all')}>All Roles</button>
+              <button type="button" className={`role-pill ${selectedRole === 'admin' ? 'active' : ''}`} onClick={() => setSelectedRole('admin')}>School Admin</button>
+              <button type="button" className={`role-pill ${selectedRole === 'teacher' ? 'active' : ''}`} onClick={() => setSelectedRole('teacher')}>Teacher</button>
+              <button type="button" className={`role-pill ${selectedRole === 'parent' ? 'active' : ''}`} onClick={() => setSelectedRole('parent')}>Parent</button>
+              <button type="button" className={`role-pill ${selectedRole === 'student' ? 'active' : ''}`} onClick={() => setSelectedRole('student')}>Student</button>
+            </div>
+          )}
+
+          <div className="eyebrow">
+            {mode === 'register'
+              ? 'NEW INSTITUTION'
+              : selectedRole === 'admin'
+              ? 'ADMINISTRATOR PORTAL'
+              : selectedRole === 'teacher'
+              ? 'FACULTY ACCESS'
+              : selectedRole === 'parent'
+              ? 'PARENT PORTAL'
+              : selectedRole === 'student'
+              ? 'STUDENT PORTAL'
+              : 'SECURE SIGN IN'}
+          </div>
+          <h2>
+            {mode === 'register'
+              ? 'Create school workspace'
+              : selectedRole === 'admin'
+              ? 'Administrator Login'
+              : selectedRole === 'teacher'
+              ? 'Teacher Portal'
+              : selectedRole === 'parent'
+              ? 'Parent Portal'
+              : selectedRole === 'student'
+              ? 'Student Portal'
+              : 'Welcome back'}
+          </h2>
           <p className="subtle">
             {mode === 'register'
               ? 'Start with a verified school workspace in under 30 seconds.'
+              : selectedRole === 'admin'
+              ? 'Manage school administration, staff, academics, and finances.'
+              : selectedRole === 'teacher'
+              ? 'Take daily attendance, publish homework, and submit exam results.'
+              : selectedRole === 'parent'
+              ? 'Track your child’s daily attendance, homework, and report cards.'
+              : selectedRole === 'student'
+              ? 'Review your class timetable, assigned homework, and grades.'
               : 'Sign in to access your school or platform dashboard.'}
           </p>
 
@@ -378,6 +491,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         </div>
       </section>
 
+      {/* 1. Google Account Selector Modal */}
       {googleOpen && (
         <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setGoogleOpen(false); }}>
           <section className="modal" style={{ maxWidth: '440px' }}>
@@ -394,12 +508,8 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
               </button>
             </div>
             <form onSubmit={handleGoogleAuth} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '11px', color: '#64748b' }}>
-                <span>🔥 Firebase Auth Engine</span>
-                <span style={{ color: isFirebaseConfigured() ? '#16a34a' : '#0284c7', fontWeight: 600 }}>{isFirebaseConfigured() ? 'Connected' : 'Interactive OAuth Ready'}</span>
-              </div>
               <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.5 }}>
-                Choose or confirm your Google identity to instantly enter your dashboard:
+                Choose or confirm your verified Google account to enter your school workspace:
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
@@ -421,15 +531,6 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
                     style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
                   />
                 </label>
-                <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
-                  School Name <span style={{ fontWeight: 400, color: '#94a3b8' }}>(if creating a new school workspace)</span>
-                  <input
-                    value={googleSchoolName}
-                    onChange={e => setGoogleSchoolName(e.target.value)}
-                    placeholder="e.g. Oakridge Academy"
-                    style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
-                  />
-                </label>
               </div>
               {error && <div className="error-banner">{error}</div>}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
@@ -441,6 +542,94 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
                 </button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {/* 2. Account Linking & Password Proof Modal (Requirement 4) */}
+      {linkingState && (
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setLinkingState(null); }}>
+          <section className="modal" style={{ maxWidth: '440px' }}>
+            <div className="modal-head">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#eef2ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: '17px', margin: 0 }}>Link Google Account</h2>
+                  <p style={{ fontSize: '11px', margin: 0, color: '#64748b' }}>Account verification required</p>
+                </div>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setLinkingState(null)}>
+                <X size={19} />
+              </button>
+            </div>
+            <form onSubmit={handleLinkSubmit} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.5, background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                An existing EduConnect account was found for <b>{linkingState.email}</b>. To link Google Sign-In, please verify your current password:
+              </div>
+              <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+                EduConnect Password
+                <input
+                  type="password"
+                  value={linkingPassword}
+                  onChange={e => setLinkingPassword(e.target.value)}
+                  placeholder="Enter your current password"
+                  required
+                  autoFocus
+                  style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
+                />
+              </label>
+              {linkingError && <div className="error-banner">{linkingError}</div>}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setLinkingState(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  {busy ? 'Verifying…' : 'Verify & Link Account →'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {/* 3. Multi-School Selection Modal (Requirement 5) */}
+      {multiSchoolState && (
+        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setMultiSchoolState(null); }}>
+          <section className="modal" style={{ maxWidth: '460px' }}>
+            <div className="modal-head">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#ecfdf5', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Building2 size={20} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: '17px', margin: 0 }}>Select School Workspace</h2>
+                  <p style={{ fontSize: '11px', margin: 0, color: '#64748b' }}>Choose a workspace to enter</p>
+                </div>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setMultiSchoolState(null)}>
+                <X size={19} />
+              </button>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                Your account belongs to multiple schools. Select a workspace to open:
+              </div>
+              {multiSchoolState.schools.map((school) => (
+                <div
+                  key={school.id}
+                  className="school-card-select"
+                  onClick={() => void executeGoogleToken(multiSchoolState.token, school.id)}
+                >
+                  <div>
+                    <h4>{school.name}</h4>
+                    <p>{school.schoolRoleName || school.role} • ID: {school.schoolId}</p>
+                  </div>
+                  <ChevronRight size={18} color="#16a34a" />
+                </div>
+              ))}
+            </div>
           </section>
         </div>
       )}

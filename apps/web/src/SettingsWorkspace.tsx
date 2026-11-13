@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Image, Palette, RefreshCw, Save, School, ShieldCheck } from 'lucide-react';
-import { request, type User } from './api';
+import { Check, Image, Palette, RefreshCw, Save, School, ShieldCheck, Link2, Unlink } from 'lucide-react';
+import { getLinkedIdentities, linkGoogleAccount, unlinkIdentity, request, type User } from './api';
 
 interface SchoolSettings {
   academic_year_label: string | null;
@@ -259,6 +259,9 @@ export default function SettingsWorkspace({ user }: { user: User }) {
           </div>
         </div>
 
+        {/* Security & Linked Accounts Section */}
+        <LinkedIdentitiesSection />
+
         {/* System & Audit metadata */}
         {data?.settings?.updated_at && (
           <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -293,5 +296,89 @@ export default function SettingsWorkspace({ user }: { user: User }) {
         )}
       </form>
     </section>
+  );
+}
+
+function LinkedIdentitiesSection() {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['linked-identities'],
+    queryFn: getLinkedIdentities,
+  });
+
+  const googleIdentity = data?.identities?.find((id) => id.provider === 'google');
+
+  async function handleUnlink() {
+    if (!window.confirm('Are you sure you want to unlink your Google account?')) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await unlinkIdentity('google');
+      setMsg({ type: 'success', text: res.message || 'Google account unlinked.' });
+      void refetch();
+    } catch (err: any) {
+      setMsg({ type: 'error', text: err.message || 'Failed to unlink Google account' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <div className="form-section-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, fontSize: '0.9rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color, #e2e8f0)', paddingBottom: '0.5rem' }}>
+        <ShieldCheck size={16} /> SECURITY & LINKED ACCOUNTS
+      </div>
+      <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem' }}>
+        Manage external identity providers for one-click authentication. Unlinking requires an account password or another linked provider.
+      </p>
+
+      {msg && (
+        <div style={{ padding: '0.6rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '0.8rem', background: msg.type === 'success' ? '#ecfdf5' : '#fef2f2', color: msg.type === 'success' ? '#065f46' : '#991b1b', border: `1px solid ${msg.type === 'success' ? '#a7f3d0' : '#fecaca'}` }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <svg width="22" height="22" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+            </svg>
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>Google Account</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                {googleIdentity
+                  ? `Linked: ${googleIdentity.email} (last authenticated ${new Date(googleIdentity.last_authenticated_at).toLocaleDateString()})`
+                  : 'Not linked to this EduConnect account'}
+              </div>
+            </div>
+          </div>
+          <div>
+            {googleIdentity ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleUnlink}
+                disabled={busy || !data?.canUnlink}
+                title={!data?.canUnlink ? 'Cannot unlink without an alternative login method' : 'Unlink Google account'}
+                style={{ fontSize: '0.75rem', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Unlink size={13} /> Unlink
+              </button>
+            ) : (
+              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
+                Link via Google Sign-In on login
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -151,6 +151,18 @@
 .auth-mode-toggle button{flex:1;padding:8px 12px;border:0;background:transparent;border-radius:6px;font-size:12px;font-weight:600;color:#64748b;transition:all .15s;cursor:pointer}
 .auth-mode-toggle button.active{background:#ffffff;color:#1e3a2b;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
 
+.role-pills-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px}
+.role-pill{padding:5px 10px;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;font-size:11px;font-weight:600;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s}
+.role-pill.active{background:#e8f5e9;border-color:#a5d6a7;color:#1b5e20}
+.role-pill:hover:not(.active){background:#f1f5f9;color:#334155}
+
+.school-card-select{border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#ffffff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all .15s}
+.school-card-select:hover{border-color:#16a34a;background:#f0fdf4;box-shadow:0 2px 6px rgba(22,163,74,0.1)}
+.school-card-select h4{margin:0 0 2px;font-size:13px;font-weight:700;color:#1e293b}
+.school-card-select p{margin:0;font-size:11px;color:#64748b}
+
+.linked-identity-badge{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff}
+
 /* School Workspace Modern Overview & Mobile Layout */
 .overview-container{display:flex;flex-direction:column;gap:18px;width:100%}
 .overview-stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}

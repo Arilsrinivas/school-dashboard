@@ -1,4 +1,8 @@
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS pgcrypto;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
 CREATE SEQUENCE IF NOT EXISTS school_display_id_seq START 1;
 
 CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());

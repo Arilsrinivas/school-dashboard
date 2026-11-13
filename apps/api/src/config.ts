@@ -52,7 +52,10 @@ const schema = z.object({
   INVITATION_BASE_URL: z.string().default('http://localhost:5173/accept-invitation'),
   RECOVERY_BASE_URL: z.string().default('http://localhost:5173/recover-account'),
   INVITATION_TTL_HOURS: z.coerce.number().int().positive().default(72),
-  SMTP_HOST: z.string().optional(), SMTP_PORT: z.coerce.number().optional(), SMTP_USER: z.string().optional(), SMTP_PASSWORD: z.string().optional(), SMTP_FROM: z.string().default('EduConnect <no-reply@example.com>')
+  SMTP_HOST: z.string().optional(), SMTP_PORT: z.coerce.number().optional(), SMTP_USER: z.string().optional(), SMTP_PASSWORD: z.string().optional(), SMTP_FROM: z.string().default('EduConnect <no-reply@example.com>'),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().optional()
 });
 
 export const env = schema.parse(process.env);
