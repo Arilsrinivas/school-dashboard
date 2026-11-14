@@ -32,7 +32,18 @@ export function exportCsv(filename:string,headers:string[],rows:(string|number|b
 }
 export async function request<T>(path:string,init:RequestInit={}):Promise<T>{
   const response=await fetch(`${API}${path}`,{...init,credentials:'include',headers:{'Content-Type':'application/json',...(accessToken?{Authorization:`Bearer ${accessToken}`}:{}) ,...init.headers}});
-  if(!response.ok){let message=`Request failed (${response.status})`;try{const payload=await response.json();message=payload.error||message;}catch{}throw new Error(message);}
+  if(!response.ok){
+    let message=`Request failed (${response.status})`;
+    let code = '';
+    try{
+      const payload=await response.json();
+      message=payload.message||payload.error||message;
+      code=payload.error||'';
+    }catch{}
+    const err = new Error(message);
+    (err as any).code = code;
+    throw err;
+  }
   if(response.status===204)return undefined as T;return response.json() as Promise<T>;
 }
 export async function login(email:string,password:string,schoolId?:string,kind:'platform'|'school'='school'){

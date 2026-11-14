@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
 import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, registerSchool, request, restoreSession, type School, type User, type GoogleAuthResult } from './api';
 import { isFirebaseConfigured, signInWithFirebaseGoogle } from './firebase';
 import AttendanceWorkspace from './AttendanceWorkspace';
@@ -83,6 +83,9 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
     schools: Array<{ id: string; schoolId: string; name: string; role: string; schoolRole?: string; schoolRoleName?: string }>;
   } | null>(null);
 
+  // Access denied / invitation required state (Requirement 5)
+  const [accessDeniedModal, setAccessDeniedModal] = useState<{ email: string; name: string } | null>(null);
+
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -96,6 +99,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         setGoogleOpen(false);
         setLinkingState(null);
         setMultiSchoolState(null);
+        setAccessDeniedModal(null);
         onLogin(result.user);
       } else if (result.type === 'requiresLinking') {
         setGoogleOpen(false);
@@ -107,7 +111,13 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         setMultiSchoolState({ token, schools: result.schools });
       }
     } catch (ex) {
-      setError((ex as Error).message);
+      const err = ex as any;
+      if (err.code === 'access_denied' || err.message?.includes('access_denied') || err.message?.includes('No EduConnect account found')) {
+        setGoogleOpen(false);
+        setAccessDeniedModal({ email: googleEmail, name: googleName });
+      } else {
+        setError(err.message || 'Authentication failed');
+      }
     } finally {
       setBusy(false);
     }
@@ -327,19 +337,28 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
               : 'Sign in to access your school or platform dashboard.'}
           </p>
 
-          <button
-            type="button"
-            className="google-btn"
-            onClick={() => void handleGoogleClick()}
-            disabled={busy}
-          >
-            <GoogleIcon />
-            <span>Continue with Google</span>
-          </button>
+          {mode === 'login' ? (
+            <>
+              <button
+                type="button"
+                className="google-btn"
+                onClick={() => void handleGoogleClick()}
+                disabled={busy}
+              >
+                <GoogleIcon />
+                <span>Continue with Google</span>
+              </button>
 
-          <div className="auth-divider">
-            <span>or {mode === 'register' ? 'register with email' : 'use credentials'}</span>
-          </div>
+              <div className="auth-divider">
+                <span>or use credentials</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: '12px', color: '#475569', marginBottom: '16px', background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldCheck size={18} color="#16a34a" style={{ flexShrink: 0 }} />
+              <span>Registering creates your school workspace &amp; administrator account. You can link Google Sign-In right after.</span>
+            </div>
+          )}
 
           {mode === 'register' ? (
             <form onSubmit={handleRegisterSubmit} className="form-stack">
@@ -629,6 +648,63 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
                   <ChevronRight size={18} color="#16a34a" />
                 </div>
               ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {accessDeniedModal && (
+        <div className="modal-backdrop">
+          <section className="modal-panel" style={{ maxWidth: '440px', padding: 0 }}>
+            <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <ShieldAlert size={26} />
+              </div>
+              <h3 style={{ fontSize: '18px', margin: '0 0 6px', color: '#0f172a' }}>School Workspace Required</h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px', lineHeight: 1.5 }}>
+                No active school membership or invitation was found for <b>{accessDeniedModal.email}</b>.
+              </p>
+
+              <div style={{ textAlign: 'left', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', fontSize: '12px', color: '#334155', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                <div>
+                  <b style={{ color: '#0f172a' }}>🏫 Creating a New School?</b>
+                  <div style={{ color: '#64748b', marginTop: '2px' }}>
+                    Set up your verified institution in 30 seconds using the <b>Register School</b> tab.
+                  </div>
+                </div>
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
+                  <b style={{ color: '#0f172a' }}>✉️ Staff, Parent, or Student?</b>
+                  <div style={{ color: '#64748b', marginTop: '2px' }}>
+                    Ask your school administrator for an invitation link to activate your access.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-wide"
+                  onClick={() => {
+                    setAccessDeniedModal(null);
+                    setGoogleOpen(false);
+                    setMode('register');
+                    if (accessDeniedModal.name) setAdminName(accessDeniedModal.name);
+                    if (accessDeniedModal.email) setRegEmail(accessDeniedModal.email);
+                  }}
+                >
+                  Register School Workspace →
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-wide"
+                  onClick={() => {
+                    setAccessDeniedModal(null);
+                    setGoogleOpen(false);
+                  }}
+                >
+                  Back to Sign In
+                </button>
+              </div>
             </div>
           </section>
         </div>
