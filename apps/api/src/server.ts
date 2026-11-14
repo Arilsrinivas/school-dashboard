@@ -39,6 +39,21 @@ app.use(cors({
 }));
 app.use(compression());
 app.use(express.json({limit:'1mb'}));
+
+let autoMigrated = false;
+app.use(async (_req, _res, next) => {
+  if (!autoMigrated && process.env.NODE_ENV !== 'test') {
+    try {
+      const { runMigrations } = await import('./db/migrate.js');
+      await runMigrations();
+      autoMigrated = true;
+    } catch (err: any) {
+      console.warn('[Auto-Migration] Notice:', err.message);
+    }
+  }
+  next();
+});
+
 app.get(['/health', '/api/health'], async (_req, res) => {
   try {
     await pool.query('SELECT 1');
