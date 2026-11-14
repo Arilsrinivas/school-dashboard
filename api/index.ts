@@ -2,15 +2,15 @@ import type { Request, Response } from 'express';
 import { app } from '../apps/api/src/server.js';
 import { runMigrations } from '../apps/api/src/db/migrate.js';
 
-let migrationsAttempted = false;
+let migrated = false;
 
 export default async function handler(req: Request, res: Response) {
-  if (!migrationsAttempted) {
-    migrationsAttempted = true;
+  if (!migrated) {
     try {
       await runMigrations();
+      migrated = true;
     } catch (err: any) {
-      console.warn('[Vercel Serverless] Migration warning:', err.message);
+      console.warn('[Vercel Serverless] Migration attempt:', err.message);
     }
   }
   return app(req, res);

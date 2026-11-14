@@ -39,22 +39,29 @@ app.use(cors({
 }));
 app.use(compression());
 app.use(express.json({limit:'1mb'}));
-app.get('/health',async(_req,res)=>{try{await pool.query('SELECT 1');res.json({status:'ok',database:'ok'});}catch{res.status(503).json({status:'unavailable',database:'unavailable'});}});
+app.get(['/health', '/api/health'], async (_req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', database: 'ok' });
+  } catch (err: any) {
+    res.status(503).json({ status: 'unavailable', database: 'unavailable', error: err.message });
+  }
+});
 const authLimiter = env.NODE_ENV === 'production'
   ? rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false })
   : (_req: express.Request, _res: express.Response, next: express.NextFunction) => next();
-app.use('/api/auth', authLimiter, authRouter);
-app.use('/api/platform',supportRouter);
-app.use('/api/platform',platformRouter);
-app.use('/api/school',schoolRouter);
-app.use('/api/school',schoolRoleRouter);
-app.use('/api/school',attendanceRouter);
-app.use('/api/school/homework',homeworkRouter);
-app.use('/api/school',examRouter);
-app.use('/api/school',timetableRouter);
-app.use('/api/school/fees',feesRouter);
-app.use('/api/school',announcementsRouter);
-app.use('/api/school',reportsRouter);
+app.use(['/api/auth', '/auth'], authLimiter, authRouter);
+app.use(['/api/platform', '/platform'], supportRouter);
+app.use(['/api/platform', '/platform'], platformRouter);
+app.use(['/api/school', '/school'], schoolRouter);
+app.use(['/api/school', '/school'], schoolRoleRouter);
+app.use(['/api/school', '/school'], attendanceRouter);
+app.use(['/api/school/homework', '/school/homework'], homeworkRouter);
+app.use(['/api/school', '/school'], examRouter);
+app.use(['/api/school', '/school'], timetableRouter);
+app.use(['/api/school/fees', '/school/fees'], feesRouter);
+app.use(['/api/school', '/school'], announcementsRouter);
+app.use(['/api/school', '/school'], reportsRouter);
 app.use((_req,res)=>res.status(404).json({error:'Not found'}));
 app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
   if(error instanceof HttpError)return res.status(error.status).json({error:error.message});
