@@ -9,6 +9,16 @@ export async function runMigrations(): Promise<void> {
   if (migratedPromise) return migratedPromise;
 
   migratedPromise = (async () => {
+    function cleanConnectionString(url: string): string {
+      try {
+        const u = new URL(url);
+        u.searchParams.delete('sslmode');
+        return u.toString();
+      } catch {
+        return url.replace(/([?&])sslmode=[^&]+(&|$)/, '$1').replace(/[?&]$/, '');
+      }
+    }
+
     function getSsl(url: string) {
       if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
         return undefined;
@@ -18,7 +28,7 @@ export async function runMigrations(): Promise<void> {
 
     const connStr = env.MIGRATION_DATABASE_URL || env.PLATFORM_DATABASE_URL || env.DATABASE_URL;
     const migrationPool = new pg.Pool({
-      connectionString: connStr,
+      connectionString: cleanConnectionString(connStr),
       max: 2,
       ssl: getSsl(connStr)
     });

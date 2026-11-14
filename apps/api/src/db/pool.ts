@@ -1,6 +1,16 @@
 import pg from 'pg';
 import { env } from '../config.js';
 
+function cleanConnectionString(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete('sslmode');
+    return u.toString();
+  } catch {
+    return url.replace(/([?&])sslmode=[^&]+(&|$)/, '$1').replace(/[?&]$/, '');
+  }
+}
+
 function getSslConfig(url: string) {
   if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
     return undefined;
@@ -9,7 +19,7 @@ function getSslConfig(url: string) {
 }
 
 export const pool = new pg.Pool({
-  connectionString: env.DATABASE_URL,
+  connectionString: cleanConnectionString(env.DATABASE_URL),
   max: 10,
   idleTimeoutMillis: 5_000,
   connectionTimeoutMillis: 10_000,
@@ -17,7 +27,7 @@ export const pool = new pg.Pool({
 });
 
 export const platformPool = new pg.Pool({
-  connectionString: env.PLATFORM_DATABASE_URL,
+  connectionString: cleanConnectionString(env.PLATFORM_DATABASE_URL),
   max: 5,
   idleTimeoutMillis: 5_000,
   connectionTimeoutMillis: 10_000,
