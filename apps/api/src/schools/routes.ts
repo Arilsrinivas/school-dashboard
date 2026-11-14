@@ -67,7 +67,10 @@ platformRouter.post('/schools',asyncRoute(async(req,res)=>{
     let deliveryStatus:'sent'|'pending_delivery'='sent';
     try { await sendInvitation(data.administratorEmail,data.name,token); }
     catch(error){ deliveryStatus='pending_delivery';console.error('Invitation delivery failed',error); }
-    res.status(201).json({school,invitation:{email:data.administratorEmail,expiresInHours:Number(process.env.INVITATION_TTL_HOURS||72),deliveryStatus,...((process.env.NODE_ENV==='development'||process.env.NODE_ENV==='test')?{developmentUrl:`${process.env.INVITATION_BASE_URL||'http://localhost:5173/accept-invitation'}?token=${token}`}:{})}});
+    const origin = (req.headers.origin as string) || (req.headers.host ? `${req.protocol || 'https'}://${req.headers.host}` : null);
+    const baseUrl = origin ? `${origin}/accept-invitation` : (process.env.INVITATION_BASE_URL || 'http://localhost:5173/accept-invitation');
+    const inviteUrl = `${baseUrl}?token=${token}`;
+    res.status(201).json({school,invitation:{email:data.administratorEmail,expiresInHours:Number(process.env.INVITATION_TTL_HOURS||72),deliveryStatus,inviteUrl,developmentUrl:inviteUrl}});
   } catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }));
 
@@ -77,7 +80,10 @@ platformRouter.post('/schools/:id/invitation/resend',asyncRoute(async(req,res)=>
   if(!result.rows[0])fail(404,'Pending school invitation not found');
   let deliveryStatus:'sent'|'pending_delivery'='sent';try{await sendInvitation(result.rows[0].email,result.rows[0].school_name,token);}catch(error){deliveryStatus='pending_delivery';console.error('Invitation resend failed',error);}
   await audit(req,'school.invitation_resent','school',schoolUuid,{email:result.rows[0].email,deliveryStatus});
-  res.json({email:result.rows[0].email,expiresInHours:Number(process.env.INVITATION_TTL_HOURS||72),deliveryStatus,...((process.env.NODE_ENV==='development'||process.env.NODE_ENV==='test')?{developmentUrl:`${process.env.INVITATION_BASE_URL||'http://localhost:5173/accept-invitation'}?token=${token}`}:{})});
+  const origin = (req.headers.origin as string) || (req.headers.host ? `${req.protocol || 'https'}://${req.headers.host}` : null);
+  const baseUrl = origin ? `${origin}/accept-invitation` : (process.env.INVITATION_BASE_URL || 'http://localhost:5173/accept-invitation');
+  const inviteUrl = `${baseUrl}?token=${token}`;
+  res.json({email:result.rows[0].email,expiresInHours:Number(process.env.INVITATION_TTL_HOURS||72),deliveryStatus,inviteUrl,developmentUrl:inviteUrl});
 }));
 
 platformRouter.patch('/schools/:id/status',asyncRoute(async(req,res)=>{

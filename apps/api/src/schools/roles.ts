@@ -54,7 +54,10 @@ schoolRoleRouter.post('/members/invitations',requireSchoolPermission('school:mem
   if(!result)fail(403,'Active school membership is required');
   await audit(req.tenant!.id,req.identity!.id,'school.member_invited','invitation',result.id,{email:result.email,role:role.rows[0].code});
   let deliveryStatus='sent';try{await sendInvitation(data.email,req.tenant!.displayId,token);}catch(error){deliveryStatus='pending_delivery';console.error('School invitation delivery failed',error);}
-  res.status(201).json({invitation:{id:result.id,email:result.email,expiresAt:result.expires_at,deliveryStatus,...((env.NODE_ENV==='development'||process.env.NODE_ENV==='test')?{developmentUrl:`${env.INVITATION_BASE_URL}?token=${token}`}:{})}});
+  const origin = (req.headers.origin as string) || (req.headers.host ? `${req.protocol || 'https'}://${req.headers.host}` : null);
+  const baseUrl = origin ? `${origin}/accept-invitation` : env.INVITATION_BASE_URL;
+  const inviteUrl = `${baseUrl}?token=${token}`;
+  res.status(201).json({invitation:{id:result.id,email:result.email,expiresAt:result.expires_at,deliveryStatus,inviteUrl,developmentUrl:inviteUrl}});
 }));
 schoolRoleRouter.patch('/members/:id/role',requireSchoolPermission('school:roles:manage','school:members:manage','school:admins:manage'),asyncRoute(async(req,res)=>{
   const membershipId=z.uuid().parse(req.params.id),{schoolRoleId}=z.object({schoolRoleId:z.uuid()}).parse(req.body);if(membershipId===req.identity!.id)fail(403,'You cannot change your own role');
