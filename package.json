@@ -1,5 +1,6 @@
 {
   "name": "calmstacks-educonnect",
+  "type": "module",
   "private": true,
   "workspaces": [
     "apps/api",
@@ -11,7 +12,8 @@
     "dev:api": "npm --workspace apps/api run dev",
     "dev:web": "npm --workspace apps/web run dev",
     "build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
-    "vercel-build": "npm run build --workspace apps/api && npm run build --workspace apps/web",
+    "build:api": "esbuild api/index.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=api/index.js",
+    "vercel-build": "npm run build --workspace apps/api && npm run build --workspace apps/web && esbuild api/index.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=api/index.js",
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
     "test": "npm run test --workspace apps/api",
     "test:e2e": "npm --workspace apps/api run test:e2e",
