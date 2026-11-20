@@ -1,0 +1,369 @@
+/* ==========================================================================
+   SCHOOLLOG DESIGN SYSTEM & RECREATION STYLES
+   Color Tokens, Glassmorphism, Responsive Grid, and Module Nav
+   ========================================================================== */
+
+:root {
+  --sl-primary: #16a34a;
+  --sl-primary-hover: #15803d;
+  --sl-primary-light: #f0fdf4;
+  --sl-primary-border: #bbf7d0;
+  --sl-accent-lime: #84cc16;
+  --sl-accent-blue: #0284c7;
+  --sl-navy-950: #09131f;
+  --sl-navy-900: #0c1e33;
+  --sl-navy-800: #142944;
+  --sl-navy-700: #1e3a5f;
+  --sl-slate-50: #f8fafc;
+  --sl-slate-100: #f1f5f9;
+  --sl-slate-200: #e2e8f0;
+  --sl-slate-300: #cbd5e1;
+  --sl-slate-400: #94a3b8;
+  --sl-slate-500: #64748b;
+  --sl-slate-600: #475569;
+  --sl-slate-700: #334155;
+  --sl-slate-800: #1e293b;
+  --sl-slate-900: #0f172a;
+  --sl-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sl-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --sl-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --sl-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --sl-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --sl-radius-md: 8px;
+  --sl-radius-lg: 12px;
+  --sl-radius-xl: 16px;
+  --sl-radius-full: 9999px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sl-font-sans);
+  background-color: #ffffff;
+  color: var(--sl-slate-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Base Utility Classes */
+.sl-container {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.sl-badge-mono {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sl-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: var(--sl-radius-full);
+  background: var(--sl-primary-light);
+  color: var(--sl-primary);
+  border: 1px solid var(--sl-primary-border);
+}
+
+.sl-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--sl-primary);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: var(--sl-radius-full);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+  box-shadow: 0 2px 4px rgba(22, 163, 74, 0.2);
+}
+
+.sl-btn-primary:hover {
+  background: var(--sl-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);
+}
+
+.sl-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ffffff;
+  color: var(--sl-slate-800);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: var(--sl-radius-full);
+  border: 1px solid var(--sl-slate-200);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.sl-btn-secondary:hover {
+  background: var(--sl-slate-50);
+  border-color: var(--sl-slate-300);
+}
+
+/* Header & Nav */
+.sl-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--sl-slate-200);
+}
+
+.sl-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+}
+
+.sl-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  color: var(--sl-slate-900);
+}
+
+.sl-brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.35);
+}
+
+.sl-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.sl-nav-item {
+  color: var(--sl-slate-600);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.sl-nav-item:hover, .sl-nav-item.active {
+  color: var(--sl-primary);
+}
+
+/* Hero Section */
+.sl-hero {
+  padding: 64px 0 40px;
+  background: radial-gradient(circle at 50% 0%, #f0fdf4 0%, #ffffff 70%);
+  text-align: center;
+  overflow: hidden;
+}
+
+.sl-hero-title {
+  font-size: clamp(32px, 5vw, 54px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--sl-slate-900);
+  max-width: 860px;
+  margin: 16px auto;
+}
+
+.sl-hero-title .gradient-text {
+  background: linear-gradient(135deg, #16a34a, #0284c7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sl-hero-subtitle {
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--sl-slate-600);
+  max-width: 680px;
+  margin: 0 auto 32px;
+}
+
+/* Interactive Tabs Preview */
+.sl-tab-strip {
+  display: inline-flex;
+  background: var(--sl-slate-100);
+  padding: 6px;
+  border-radius: var(--sl-radius-full);
+  gap: 4px;
+  border: 1px solid var(--sl-slate-200);
+  margin-bottom: 32px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.sl-tab-pill {
+  border: none;
+  background: transparent;
+  padding: 8px 18px;
+  border-radius: var(--sl-radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sl-slate-600);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.sl-tab-pill.active {
+  background: #ffffff;
+  color: var(--sl-slate-900);
+  box-shadow: var(--sl-shadow-sm);
+}
+
+/* Live Product Stage Preview Card */
+.sl-stage-card {
+  background: #ffffff;
+  border: 1px solid var(--sl-slate-200);
+  border-radius: var(--sl-radius-xl);
+  box-shadow: var(--sl-shadow-xl);
+  text-align: left;
+  overflow: hidden;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.sl-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--sl-slate-50);
+  border-bottom: 1px solid var(--sl-slate-200);
+}
+
+.sl-traffic-lights {
+  display: flex;
+  gap: 6px;
+}
+
+.sl-traffic-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sl-slate-300);
+}
+
+/* Metric Stats Row */
+.sl-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 24px;
+  background: var(--sl-slate-50);
+  border-bottom: 1px solid var(--sl-slate-200);
+}
+
+.sl-stat-box {
+  background: #ffffff;
+  padding: 16px 20px;
+  border-radius: var(--sl-radius-lg);
+  border: 1px solid var(--sl-slate-200);
+}
+
+.sl-stat-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--sl-slate-900);
+  letter-spacing: -0.02em;
+}
+
+.sl-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sl-slate-500);
+  margin-top: 4px;
+}
+
+/* Module Feature Cards */
+.sl-features-section {
+  padding: 80px 0;
+  background: #ffffff;
+}
+
+.sl-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 28px;
+}
+
+.sl-feature-card {
+  border: 1px solid var(--sl-slate-200);
+  border-radius: var(--sl-radius-xl);
+  padding: 32px 28px;
+  background: #ffffff;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.sl-feature-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--sl-primary-border);
+  box-shadow: 0 12px 24px -10px rgba(22, 163, 74, 0.15);
+}
+
+.sl-feature-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--sl-primary-light);
+  color: var(--sl-primary);
+  display: grid;
+  place-items: center;
+  margin-bottom: 20px;
+}
+
+/* Modals */
+.sl-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.sl-modal-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 540px;
+  border-radius: var(--sl-radius-xl);
+  box-shadow: var(--sl-shadow-xl);
+  overflow: hidden;
+  animation: slPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slPop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}

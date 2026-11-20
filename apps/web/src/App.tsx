@@ -15,6 +15,9 @@ import AnnouncementsWorkspace from './AnnouncementsWorkspace';
 import ReportsWorkspace from './ReportsWorkspace';
 import SettingsWorkspace from './SettingsWorkspace';
 import NotificationBell from './NotificationBell';
+import SchoollogLanding from './SchoollogLanding';
+import AdmissionsWorkspace from './AdmissionsWorkspace';
+import TransportWorkspace from './TransportWorkspace';
 
 type Overview={schools:{total_schools:number;active_schools:number;suspended_schools:number;pending_schools:number};total_users:number;total_students:number;total_teachers:number;total_parents:number;growth:{month:string;schools:number}[]};
 type Plans={items:{id:string;name:string;billing_interval:string;price_minor:number|null;currency:string}[]};
@@ -25,11 +28,198 @@ const money=(minor:number|null,currency='INR')=>minor===null?'Configured per con
 
 export default function App(){
   const [user,setUser]=useState<User|null>(null),[ready,setReady]=useState(false);
+  const [view, setView] = useState<'landing' | 'portal' | 'admissions' | 'transport'>('landing');
+  const [demoOpen, setDemoOpen] = useState(false);
+
   useEffect(()=>{restoreSession().then(async ok=>{if(ok){try{const me=await request<{user:User}>('/api/auth/me');setUser(me.user);}catch{await logout();}}setReady(true);});},[]);
   if(window.location.pathname==='/accept-invitation')return <InvitationPage/>;
   if(window.location.pathname==='/recover-account')return <RecoveryPage/>;
   if(!ready)return <div className="grid min-h-screen place-items-center text-sm text-muted">Opening your workspace…</div>;
-  return user?(user.role==='super_admin'?<ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>:user.role==='support_agent'?<SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>:<SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>):<AuthPortal onLogin={setUser}/>;
+
+  if (user) {
+    return user.role==='super_admin' ? (
+      <ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+    ) : user.role==='support_agent' ? (
+      <SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+    ) : (
+      <SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+    );
+  }
+
+  // Schoollog Public Experience & Portal Router
+  if (view === 'admissions') {
+    return (
+      <div>
+        <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Admissions CRM // Public Preview</div>
+          <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
+            ← Back to Home
+          </button>
+        </div>
+        <AdmissionsWorkspace />
+      </div>
+    );
+  }
+
+  if (view === 'transport') {
+    return (
+      <div>
+        <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Bus GPS Fleet // Live Preview</div>
+          <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
+            ← Back to Home
+          </button>
+        </div>
+        <TransportWorkspace />
+      </div>
+    );
+  }
+
+  if (view === 'portal') {
+    return (
+      <div>
+        <div style={{ background: '#09131f', padding: '10px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '13px' }}>erp.schoollog.in // Unified Institution Login</div>
+          <button onClick={() => setView('landing')} style={{ background: 'transparent', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '12px' }}>
+            ← Return to Schoollog Home
+          </button>
+        </div>
+        <AuthPortal onLogin={setUser}/>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <SchoollogLanding
+        onOpenDemo={() => setDemoOpen(true)}
+        onGoToLogin={() => setView('portal')}
+        onExploreModule={(mod) => {
+          if (mod === 'admissions') setView('admissions');
+          else if (mod === 'transport') setView('transport');
+          else setView('portal');
+        }}
+      />
+      {demoOpen && (
+        <SchoollogDemoModal onClose={() => setDemoOpen(false)} />
+      )}
+    </>
+  );
+}
+
+function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
+  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    schoolName: '',
+    phone: '',
+    role: 'Principal / Director',
+    studentCount: '500 - 1000 Students',
+    notes: ''
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="sl-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="sl-modal-card">
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="sl-brand-mark" style={{ width: '28px', height: '28px' }}>
+              <GraduationCap size={16} />
+            </div>
+            <strong style={{ fontSize: '16px', color: '#0f172a' }}>Book a Live Schoollog Demo</strong>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {submitted ? (
+          <div style={{ padding: '36px 24px', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
+              <Check size={28} />
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Demo Request Received!</h3>
+            <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px' }}>
+              Our institutional solution consultant will connect with <strong>{form.name}</strong> at <strong>{form.phone}</strong> to walk through Schoollog tailored for <strong>{form.schoolName}</strong>.
+            </p>
+            <button onClick={onClose} className="sl-btn-primary" style={{ width: '100%' }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Your Full Name</label>
+              <input
+                required
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Dr. Anand Verma"
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Official School Name</label>
+              <input
+                required
+                value={form.schoolName}
+                onChange={e => setForm({ ...form, schoolName: e.target.value })}
+                placeholder="Delhi Public School / St. Xavier's Academy"
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Mobile Number (WhatsApp)</label>
+                <input
+                  required
+                  value={form.phone}
+                  onChange={e => setForm({ ...form, phone: e.target.value })}
+                  placeholder="+91 98000 00000"
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Your Role</label>
+                <select
+                  value={form.role}
+                  onChange={e => setForm({ ...form, role: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                >
+                  <option value="Principal / Director">Principal / Director</option>
+                  <option value="School Chairman / Trustee">School Chairman / Trustee</option>
+                  <option value="Administrator">Administrator</option>
+                  <option value="IT Incharge">IT Incharge</option>
+                  <option value="Accountant">Accountant</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Student Strength</label>
+              <select
+                value={form.studentCount}
+                onChange={e => setForm({ ...form, studentCount: e.target.value })}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+              >
+                <option value="Under 500 Students">Under 500 Students</option>
+                <option value="500 - 1000 Students">500 - 1000 Students</option>
+                <option value="1000 - 2500 Students">1000 - 2500 Students</option>
+                <option value="2500+ Students (School Chain)">2500+ Students (School Chain)</option>
+              </select>
+            </div>
+            <button type="submit" className="sl-btn-primary" style={{ width: '100%', marginTop: '6px', borderRadius: '8px' }}>
+              Confirm &amp; Request Demo Call
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function GoogleIcon() {
@@ -724,7 +914,7 @@ function RecoveryPage(){
   </section></main>;
 }
 
-type SchoolTab = 'overview'|'classes'|'students'|'attendance'|'homework'|'exams'|'timetable'|'fees'|'announcements'|'reports'|'settings'|'access';
+type SchoolTab = 'overview'|'classes'|'students'|'admissions'|'attendance'|'homework'|'exams'|'timetable'|'transport'|'fees'|'announcements'|'reports'|'settings'|'access';
 
 function SchoolOverviewView({
   metrics,
@@ -892,11 +1082,17 @@ function SchoolOverviewView({
             All administrative tools and school operations are accessible anytime from the top bar or bottom navigation.
           </p>
           <div className="module-links-list">
+            <div className="module-link-row" onClick={() => onNavigate('admissions')}>
+              <UserPlus size={16} /> <span>Admissions & Enquiry CRM</span> <small>&rarr;</small>
+            </div>
             <div className="module-link-row" onClick={() => onNavigate('classes')}>
               <Layers size={16} /> <span>Classes & Sections</span> <small>&rarr;</small>
             </div>
             <div className="module-link-row" onClick={() => onNavigate('students')}>
               <GraduationCap size={16} /> <span>Student Directory & Records</span> <small>&rarr;</small>
+            </div>
+            <div className="module-link-row" onClick={() => onNavigate('transport')}>
+              <Clock3 size={16} /> <span>Transport & Live Bus GPS</span> <small>&rarr;</small>
             </div>
             <div className="module-link-row" onClick={() => onNavigate('exams')}>
               <Award size={16} /> <span>Exams & Report Cards</span> <small>&rarr;</small>
@@ -957,11 +1153,12 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
   const canAccess=schoolAdmin||!!user.permissions?.includes('support-access:review');
 
   const tabs: SchoolTab[] = [
-    ...(admin ? ['overview','classes','students'] as const : []),
+    ...(admin ? ['overview','admissions','classes','students'] as const : []),
     ...(canAttendance ? ['attendance'] as const : []),
     ...(canHomework ? ['homework'] as const : []),
     ...(canExams ? ['exams'] as const : []),
     ...(canTimetable ? ['timetable'] as const : []),
+    'transport' as const,
     ...(canFees ? ['fees'] as const : []),
     ...(canAnnouncements ? ['announcements'] as const : []),
     ...(canReports ? ['reports'] as const : []),
@@ -991,12 +1188,14 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
   const getTabLabel = (item: SchoolTab) => {
     switch(item) {
       case 'overview': return 'Overview';
+      case 'admissions': return 'Admissions CRM';
       case 'classes': return 'Classes';
       case 'students': return 'Students';
       case 'attendance': return 'Attendance';
       case 'homework': return 'Homework';
       case 'exams': return 'Exams & Results';
       case 'timetable': return 'Timetable';
+      case 'transport': return 'Transport GPS';
       case 'fees': return 'Fees & Payments';
       case 'announcements': return 'Announcements';
       case 'reports': return 'Reports';
@@ -1009,12 +1208,14 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
   const getTabIcon = (item: SchoolTab) => {
     switch (item) {
       case 'overview': return LayoutDashboard;
+      case 'admissions': return UserPlus;
       case 'classes': return Layers;
       case 'students': return GraduationCap;
       case 'attendance': return CalendarCheck;
       case 'homework': return FileText;
       case 'exams': return Award;
       case 'timetable': return Clock;
+      case 'transport': return Clock3;
       case 'fees': return Receipt;
       case 'announcements': return Bell;
       case 'reports': return BarChart3;
@@ -1169,7 +1370,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
         </>}
       </div>
     </div>}
-  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
+  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='admissions'?<AdmissionsWorkspace/>:tab==='transport'?<TransportWorkspace/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
   {(bulkError||addYear.isError||addClass.isError||addStudent.isError||bulkImport.isError)&&<div className="error-inline school-error">{bulkError||((addYear.error||addClass.error||addStudent.error||bulkImport.error) as Error).message}</div>}{dialog&&<div className="modal-backdrop"><section className="modal school-modal"><div className="modal-head"><div><div className="eyebrow">SCHOOL SETUP</div><h2>{dialog==='year'?'Add academic year':dialog==='class'?'Add a class':'Admit a student'}</h2><p>Records are saved to this school workspace.</p></div><button className="icon-button" onClick={()=>setDialog(null)}><X size={19}/></button></div>{dialog==='year'?<YearForm pending={addYear.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addYear.mutate(v)}/>:dialog==='class'?<ClassForm years={years.data?.items||[]} pending={addClass.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addClass.mutate(v)}/>:<StudentForm years={years.data?.items||[]} classes={classes.data?.items||[]} pending={addStudent.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addStudent.mutate(v)}/>}</section></div>}
   {/* Mobile Bottom Navigation Bar */}
   <nav className="school-bottom-nav" aria-label="Quick Mobile Navigation">
