@@ -9,7 +9,7 @@ import { generateInvitationToken, sendInvitation } from '../auth/routes.js';
 
 export const schoolRoleRouter=Router();
 schoolRoleRouter.use(authenticate);
-const permissionNames=['dashboard:read','school:roles:manage','school:members:manage','school:admins:manage','school:settings:read','school:settings:update','academics:read','academics:read:assigned','academics:manage','students:read','students:read:assigned','students:read:linked','students:read:self','students:admit','students:manage','students:archive','parents:read','parents:manage','teachers:read','teachers:manage','attendance:read','attendance:read:assigned','attendance:read:linked','attendance:read:self','attendance:manage','attendance:manage:assigned','homework:read','homework:read:assigned','homework:read:linked','homework:read:self','homework:manage','homework:manage:assigned','exams:read','exams:read:assigned','exams:manage','exams:manage:assigned','results:read','results:read:assigned','results:read:linked','results:read:self','results:publish','fees:read','fees:read:linked','fees:manage','timetable:read','timetable:read:assigned','timetable:manage','announcements:read','announcements:manage','reports:read','reports:class','support-access:review'] as const;
+const permissionNames=['dashboard:read','school:roles:manage','school:members:manage','school:admins:manage','school:settings:read','school:settings:update','academics:read','academics:read:assigned','academics:manage','students:read','students:read:assigned','students:read:linked','students:read:self','students:admit','students:manage','students:archive','students:medical:read','parents:read','parents:manage','teachers:read','teachers:manage','attendance:read','attendance:read:assigned','attendance:read:linked','attendance:read:self','attendance:manage','attendance:manage:assigned','homework:read','homework:read:assigned','homework:read:linked','homework:read:self','homework:manage','homework:manage:assigned','exams:read','exams:read:assigned','exams:manage','exams:manage:assigned','results:read','results:read:assigned','results:read:linked','results:read:self','results:publish','fees:read','fees:read:linked','fees:manage','timetable:read','timetable:read:assigned','timetable:manage','announcements:read','announcements:manage','reports:read','reports:class','support-access:review'] as const;
 const supportScopePermission=z.enum(['students:read','fees:read','announcements:read','messages:read']);
 const permissionSchema=z.enum(permissionNames);
 const roleSchema=z.object({name:z.string().trim().min(2).max(80),code:z.string().trim().min(2).max(40).regex(/^[a-z][a-z0-9_]*$/),memberKind:z.enum(['school_admin','teacher','parent','student']),permissions:z.array(permissionSchema).max(40)});
@@ -57,7 +57,15 @@ schoolRoleRouter.post('/members/invitations',requireSchoolPermission('school:mem
   const origin = (req.headers.origin as string) || (req.headers.host ? `${req.protocol || 'https'}://${req.headers.host}` : null);
   const baseUrl = origin ? `${origin}/accept-invitation` : env.INVITATION_BASE_URL;
   const inviteUrl = `${baseUrl}?token=${token}`;
-  res.status(201).json({invitation:{id:result.id,email:result.email,expiresAt:result.expires_at,deliveryStatus,inviteUrl,developmentUrl:inviteUrl}});
+  res.status(201).json({
+    invitation: {
+      id: result.id,
+      email: result.email,
+      expiresAt: result.expires_at,
+      deliveryStatus,
+      ...(env.NODE_ENV !== 'production' ? { inviteUrl, developmentUrl: inviteUrl } : {})
+    }
+  });
 }));
 schoolRoleRouter.patch('/members/:id/role',requireSchoolPermission('school:roles:manage','school:members:manage','school:admins:manage'),asyncRoute(async(req,res)=>{
   const membershipId=z.uuid().parse(req.params.id),{schoolRoleId}=z.object({schoolRoleId:z.uuid()}).parse(req.body);if(membershipId===req.identity!.id)fail(403,'You cannot change your own role');

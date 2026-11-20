@@ -5,8 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
-import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, registerSchool, request, restoreSession, type School, type User, type GoogleAuthResult } from './api';
-import { isFirebaseConfigured, signInWithFirebaseGoogle } from './firebase';
+import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, request, restoreSession, type School, type User, type GoogleAuthResult } from './api';
 import AttendanceWorkspace from './AttendanceWorkspace';
 import HomeworkWorkspace from './HomeworkWorkspace';
 import ExamsWorkspace from './ExamsWorkspace';
@@ -162,30 +161,10 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
     }
   }
 
-  async function handleRegisterSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      const u = await registerSchool({
-        schoolName,
-        administratorName: adminName,
-        email: regEmail,
-        password: regPassword,
-      });
-      localStorage.setItem('educonnect_has_account', 'true');
-      onLogin(u);
-    } catch (ex) {
-      setError((ex as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleGoogleClick() {
     setError('');
 
-    // 1. Check Google Identity Services
+    // Google Identity Services (GSI)
     const googleGSI = (window as any).google?.accounts?.id;
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (googleGSI && clientId) {
@@ -205,40 +184,8 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
       }
     }
 
-    // 2. Check Firebase Auth
-    if (isFirebaseConfigured()) {
-      setBusy(true);
-      try {
-        const fbUser = await signInWithFirebaseGoogle();
-        if (fbUser.idToken) {
-          await executeGoogleToken(fbUser.idToken);
-          return;
-        }
-      } catch (ex) {
-        const err = ex as Error;
-        if (err.message !== 'FIREBASE_NOT_CONFIGURED') {
-          setError(err.message || 'Firebase Google sign-in failed');
-          return;
-        }
-      } finally {
-        setBusy(false);
-      }
-    }
-
-    // 3. Fallback: Interactive Google Sign-In Chooser
-    setGoogleOpen(true);
-  }
-
-  async function handleGoogleAuth(e: React.FormEvent) {
-    e.preventDefault();
-    const token = `test-google-token:${JSON.stringify({
-      sub: `google-${btoa(googleEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24)}`,
-      email: googleEmail.toLowerCase().trim(),
-      name: googleName,
-      email_verified: true,
-      iss: 'https://accounts.google.com',
-    })}`;
-    await executeGoogleToken(token);
+    // When GSI is not loaded or configured, notify user
+    setError('Google Sign-In is initializing or requires VITE_GOOGLE_CLIENT_ID to be configured. Please sign in with email and password.');
   }
 
   return (
@@ -273,17 +220,17 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
           <div className="auth-mode-toggle">
             <button
               type="button"
-              className={mode === 'register' ? 'active' : ''}
-              onClick={() => { setMode('register'); setError(''); }}
-            >
-              Register School
-            </button>
-            <button
-              type="button"
               className={mode === 'login' ? 'active' : ''}
               onClick={() => { setMode('login'); setError(''); }}
             >
               Sign In
+            </button>
+            <button
+              type="button"
+              className={mode === 'register' ? 'active' : ''}
+              onClick={() => { setMode('register'); setError(''); }}
+            >
+              Onboard Institution
             </button>
           </div>
 
@@ -361,67 +308,28 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
           )}
 
           {mode === 'register' ? (
-            <form onSubmit={handleRegisterSubmit} className="form-stack">
-              <label>
-                School Name
-                <input
-                  value={schoolName}
-                  onChange={e => setSchoolName(e.target.value)}
-                  placeholder="e.g. Oakridge International Academy"
-                  required
-                  minLength={2}
-                />
-              </label>
-              <label>
-                Administrator Full Name
-                <input
-                  value={adminName}
-                  onChange={e => setAdminName(e.target.value)}
-                  placeholder="e.g. Dr. Sarah Jenkins"
-                  autoComplete="name"
-                  required
-                  minLength={2}
-                />
-              </label>
-              <label>
-                Work Email Address
-                <input
-                  type="email"
-                  value={regEmail}
-                  onChange={e => setRegEmail(e.target.value)}
-                  placeholder="admin@oakridge.edu"
-                  autoComplete="username"
-                  required
-                />
-              </label>
-              <label>
-                Create Password
-                <input
-                  type="password"
-                  value={regPassword}
-                  onChange={e => setRegPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </label>
-              {error && <div className="error-banner">{error}</div>}
-              <button className="btn btn-primary btn-wide" disabled={busy}>
-                {busy ? 'Creating school workspace…' : 'Create School Workspace'}
+            <div style={{ padding: '0.75rem 0' }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a', fontWeight: 600, marginBottom: '6px' }}>
+                  <Building2 size={20} color="#16a34a" />
+                  CalmStacks Managed Onboarding
+                </div>
+                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.5, margin: 0 }}>
+                  To ensure enterprise-grade tenant isolation, data protection, and verified accreditation, new school workspaces are provisioned by the CalmStacks platform team.
+                </p>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                If your institution has already been registered, your designated administrator received an activation invitation via email. You can also use the account recovery workflow below to access your workspace.
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary btn-wide"
+                onClick={() => { setMode('login'); setError(''); }}
+              >
+                Return to Sign In
                 <ChevronRight size={17} />
               </button>
-              <div style={{ marginTop: '0.4rem', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
-                Already registered?{' '}
-                <button
-                  type="button"
-                  style={{ border: 0, background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
-                  onClick={() => { setMode('login'); setError(''); }}
-                >
-                  Sign in here
-                </button>
-              </div>
-            </form>
+            </div>
           ) : (
             <>
               <div className="auth-switch">
@@ -509,61 +417,6 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
           </a>
         </div>
       </section>
-
-      {/* 1. Google Account Selector Modal */}
-      {googleOpen && (
-        <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setGoogleOpen(false); }}>
-          <section className="modal" style={{ maxWidth: '440px' }}>
-            <div className="modal-head">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <GoogleIcon />
-                <div>
-                  <h2 style={{ fontSize: '18px', margin: 0 }}>Sign in with Google</h2>
-                  <p style={{ fontSize: '11px', margin: 0, color: '#64748b' }}>to continue to CalmStacks EduConnect</p>
-                </div>
-              </div>
-              <button type="button" className="icon-button" onClick={() => setGoogleOpen(false)}>
-                <X size={19} />
-              </button>
-            </div>
-            <form onSubmit={handleGoogleAuth} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.5 }}>
-                Choose or confirm your verified Google account to enter your school workspace:
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
-                  Google Full Name
-                  <input
-                    value={googleName}
-                    onChange={e => setGoogleName(e.target.value)}
-                    required
-                    style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
-                  />
-                </label>
-                <label style={{ display: 'grid', gap: '5px', fontSize: '11px', color: '#475569', fontWeight: 600 }}>
-                  Google Email
-                  <input
-                    type="email"
-                    value={googleEmail}
-                    onChange={e => setGoogleEmail(e.target.value)}
-                    required
-                    style={{ height: '38px', padding: '0 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }}
-                  />
-                </label>
-              </div>
-              {error && <div className="error-banner">{error}</div>}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setGoogleOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? 'Authenticating…' : 'Continue with Google →'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
 
       {/* 2. Account Linking & Password Proof Modal (Requirement 4) */}
       {linkingState && (

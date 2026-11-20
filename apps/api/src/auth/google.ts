@@ -17,56 +17,37 @@ function getOAuth2Client(): OAuth2Client {
   return oauth2Client;
 }
 
+export type GoogleTokenVerifier = (token: string, expectedAudience?: string) => Promise<VerifiedGooglePayload>;
+
+let testVerifier: GoogleTokenVerifier | null = null;
+
+/**
+ * Configure a custom Google token verifier for testing purposes.
+ * Strictly forbidden outside test environments.
+ */
+export function setGoogleTokenVerifier(verifier: GoogleTokenVerifier | null): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('setGoogleTokenVerifier can only be called in test environment');
+  }
+  testVerifier = verifier;
+}
+
+export function resetGoogleTokenVerifier(): void {
+  testVerifier = null;
+}
+
 export async function verifyGoogleIdToken(token: string, expectedAudience?: string): Promise<VerifiedGooglePayload> {
   if (!token || typeof token !== 'string') {
     throw new Error('Google ID token is required');
   }
 
-  const clientId = expectedAudience || env.GOOGLE_CLIENT_ID;
-
-  // 1. Support structured mock tokens in test or development environments
-  if (token.startsWith('test-google-token:') || token.startsWith('mock-google-token:')) {
-    const rawJson = token.replace(/^(test-google-token:|mock-google-token:)/, '');
-    let parsed: any;
-    try {
-      parsed = JSON.parse(rawJson);
-    } catch {
-      throw new Error('Malformed test token');
-    }
-
-    if (parsed.invalidSignature) {
-      throw new Error('Invalid token signature');
-    }
-    if (parsed.exp && parsed.exp * 1000 < Date.now()) {
-      throw new Error('Token is expired');
-    }
-    if (clientId && parsed.aud && parsed.aud !== clientId) {
-      throw new Error('Invalid token audience');
-    }
-    const validIssuers = ['accounts.google.com', 'https://accounts.google.com'];
-    if (parsed.iss && !validIssuers.includes(parsed.iss)) {
-      throw new Error('Invalid token issuer');
-    }
-    if (!parsed.email || !parsed.email.includes('@')) {
-      throw new Error('Valid email information is required');
-    }
-    if (parsed.email_verified === false) {
-      throw new Error('Google email is not verified');
-    }
-    if (!parsed.sub) {
-      throw new Error('Google sub claim is missing');
-    }
-
-    return {
-      sub: String(parsed.sub),
-      email: String(parsed.email).toLowerCase().trim(),
-      emailVerified: parsed.email_verified !== false,
-      name: String(parsed.name || parsed.email.split('@')[0]),
-      picture: parsed.picture
-    };
+  // In test environment ONLY, allow injected verifier
+  if (process.env.NODE_ENV === 'test' && testVerifier) {
+    return testVerifier(token, expectedAudience);
   }
 
-  // 2. Official Google token verification via google-auth-library
+  // Official Google token verification via google-auth-library
+  const clientId = expectedAudience || env.GOOGLE_CLIENT_ID;
   const client = getOAuth2Client();
   const ticket = await client.verifyIdToken({
     idToken: token,

@@ -20,18 +20,27 @@ import { reportsRouter } from './reports/routes.js';
 import { HttpError } from './http.js';
 import { pool, platformPool } from './db/pool.js';
 
+const APPROVED_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+-arilsrinivas-projects\.vercel\.app$/;
+const APPROVED_PROD_DOMAIN = 'https://school-dashboard-nine-rho.vercel.app';
+
 export const app=express();
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests without origin (same-origin, curl, serverless internal)
+    // Allow requests without origin (same-origin, mobile apps, serverless internal)
     if (!origin) return callback(null, true);
-    // Allow localhost, any vercel.app preview/production deployment, or configured WEB_ORIGIN
-    if (origin.includes('localhost') || origin.endsWith('.vercel.app') || origin === env.WEB_ORIGIN) {
+    // Exact match for configured WEB_ORIGIN
+    if (origin === env.WEB_ORIGIN) return callback(null, true);
+    // Exact match for verified production deployment domain
+    if (origin === APPROVED_PROD_DOMAIN) return callback(null, true);
+    // Scoped regex match for team/project preview domains
+    if (APPROVED_PREVIEW_PATTERN.test(origin)) return callback(null, true);
+    // Allow localhost only in non-production environments
+    if (env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
       return callback(null, true);
     }
-    return callback(null, true);
+    return callback(new HttpError(403, 'CORS origin not allowed: ' + origin), false);
   },
   credentials: true,
   methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
@@ -40,26 +49,42 @@ app.use(cors({
 app.use(compression());
 app.use(express.json({limit:'1mb'}));
 
-let autoMigrated = false;
-app.use(async (_req, _res, next) => {
-  if (!autoMigrated && process.env.NODE_ENV !== 'test') {
-    try {
-      const { runMigrations } = await import('./db/migrate.js');
-      await runMigrations();
-      autoMigrated = true;
-    } catch (err: any) {
-      console.warn('[Auto-Migration] Notice:', err.message);
+// Controlled Migration Execution Check:
+// In production, migrations must be executed via controlled CI/CD pipeline or deployment task (`npm run db:migrate`).
+// Running DDL migrations inside incoming HTTP request handlers is strictly forbidden in production.
+if (process.env.NODE_ENV === 'development' && process.env.AUTO_MIGRATE === 'true') {
+  let autoMigrated = false;
+  app.use(async (_req, _res, next) => {
+    if (!autoMigrated) {
+      try {
+        const { runMigrations } = await import('./db/migrate.js');
+        await runMigrations();
+        autoMigrated = true;
+      } catch (err: any) {
+        console.warn('[Auto-Migration] Development notice:', err.message);
+      }
     }
-  }
-  next();
-});
+    next();
+  });
+}
 
 app.get(['/health', '/api/health'], async (_req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', database: 'ok' });
+    await platformPool.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      database: 'ok',
+      platformDatabase: 'ok',
+      timestamp: new Date().toISOString()
+    });
   } catch (err: any) {
-    res.status(503).json({ status: 'unavailable', database: 'unavailable', error: err.message });
+    res.status(503).json({
+      status: 'unavailable',
+      database: 'unavailable',
+      error: 'Database connectivity check failed',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 const authLimiter = env.NODE_ENV === 'production'

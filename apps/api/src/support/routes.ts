@@ -22,8 +22,11 @@ supportRouter.get('/support-access/:id/students',authenticate,requireSupportAgen
   const grant=await platformPool.query(`SELECT g.id,g.school_id,g.expires_at,s.school_id AS display_id FROM support_access_requests g JOIN schools s ON s.id=g.school_id WHERE g.id=$1 AND g.requested_by=$2 AND g.status='approved' AND g.expires_at>now() AND 'students:read'=ANY(g.approved_scopes) AND s.status='active'`,[requestId,req.identity!.id]);
   if(!grant.rows[0])fail(403,'No active school-approved student access grant');
   const schoolId=grant.rows[0].school_id;
-  const records=await platformPool.query(`SELECT id,admission_number,first_name,last_name,status FROM students WHERE school_id=$1 ORDER BY last_name,first_name LIMIT $2 OFFSET $3`,[schoolId,limit,(page-1)*limit]);
-  const total=await platformPool.query('SELECT count(*)::int AS total FROM students WHERE school_id=$1',[schoolId]);
+  const { records, total } = await tenantTransaction(schoolId, async (client) => {
+    const recs = await client.query(`SELECT id,admission_number,first_name,last_name,status FROM students WHERE school_id=$1 ORDER BY last_name,first_name LIMIT $2 OFFSET $3`,[schoolId,limit,(page-1)*limit]);
+    const tot = await client.query('SELECT count(*)::int AS total FROM students WHERE school_id=$1',[schoolId]);
+    return { records: recs, total: tot };
+  });
   await platformPool.query(`INSERT INTO platform_audit_logs(actor_id,action,target_type,target_id,metadata) VALUES($1,'support_access.student_records_read','support_access_request',$2,$3)`,[req.identity!.id,requestId,JSON.stringify({schoolId:grant.rows[0].display_id,page,limit,returned:records.rowCount})]);
   await tenantTransaction(schoolId,client=>client.query("INSERT INTO audit_logs(school_id,action,target_type,target_id,metadata) VALUES($1,'support_access.student_records_read','support_access_request',$2,$3)",[schoolId,requestId,JSON.stringify({platformUserId:req.identity!.id,page,limit,returned:records.rowCount})]));
   res.json({items:records.rows,page,limit,total:total.rows[0].total,accessExpiresAt:grant.rows[0].expires_at});

@@ -29,10 +29,11 @@ test('Google Authentication integration, token verification, account linking, sc
   process.env.PLATFORM_DATABASE_URL = `postgresql://educonnect_platform@127.0.0.1:${port}/postgres?sslmode=disable`;
   process.env.MIGRATION_DATABASE_URL = process.env.PLATFORM_DATABASE_URL;
 
-  const [{ pool, platformPool, tenantTransaction }, { signAccess }, { authRouter }] = await Promise.all([
+  const [{ pool, platformPool, tenantTransaction }, { signAccess }, { authRouter }, { setGoogleTokenVerifier, resetGoogleTokenVerifier }] = await Promise.all([
     import('../db/pool.js'),
     import('./tokens.js'),
-    import('./routes.js')
+    import('./routes.js'),
+    import('./google.js')
   ]);
 
   pool.on('acquire', client => { void client.query('SET ROLE educonnect_app'); });
@@ -73,6 +74,31 @@ test('Google Authentication integration, token verification, account linking, sc
     const schoolA = await makeSchool('active');
     const schoolB = await makeSchool('active');
     const schoolSuspended = await makeSchool('suspended');
+
+    // Injected test verifier to support integration test mocks safely
+    setGoogleTokenVerifier(async (token: string, expectedAudience?: string) => {
+      const clientId = expectedAudience || process.env.GOOGLE_CLIENT_ID;
+      if (token.startsWith('test-google-token:') || token.startsWith('mock-google-token:')) {
+        const rawJson = token.replace(/^(test-google-token:|mock-google-token:)/, '');
+        const parsed = JSON.parse(rawJson);
+        if (parsed.invalidSignature) throw new Error('Invalid token signature');
+        if (parsed.exp && parsed.exp * 1000 < Date.now()) throw new Error('Token is expired');
+        if (clientId && parsed.aud && parsed.aud !== clientId) throw new Error('Invalid token audience');
+        const validIssuers = ['accounts.google.com', 'https://accounts.google.com'];
+        if (parsed.iss && !validIssuers.includes(parsed.iss)) throw new Error('Invalid token issuer');
+        if (!parsed.email || !parsed.email.includes('@')) throw new Error('Valid email information is required');
+        if (parsed.email_verified === false) throw new Error('Google email is not verified');
+        if (!parsed.sub) throw new Error('Google sub claim is missing');
+        return {
+          sub: String(parsed.sub),
+          email: String(parsed.email).toLowerCase().trim(),
+          emailVerified: parsed.email_verified !== false,
+          name: String(parsed.name || parsed.email.split('@')[0]),
+          picture: parsed.picture
+        };
+      }
+      throw new Error('Unrecognized test token format');
+    });
 
     // Helper to generate mock tokens
     const makeMockToken = (params: {
@@ -381,6 +407,17 @@ test('Google Authentication integration, token verification, account linking, sc
     {
       const logoutRes = await call('/api/auth/logout', { method: 'POST' });
       assert.equal(logoutRes.status, 204, 'Logout returns 204');
+    }
+
+    // 14. Verification that un-injected mock tokens are strictly rejected
+    {
+      resetGoogleTokenVerifier();
+      const mockToken = makeMockToken({ email: 'hacker@attacker.test' });
+      const res = await call('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken: mockToken })
+      });
+      assert.equal(res.status, 401, 'Mock token rejected when verifier is reset');
     }
 
   } finally {

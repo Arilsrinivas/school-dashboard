@@ -103,98 +103,13 @@ authRouter.post('/school/login', asyncRoute(async (req,res) => {
   res.json({accessToken,user:{id:user.id,name:user.name,role:user.role,schoolRole:user.school_role,permissions:permissions.rows.map(row=>row.permission_key),schoolId:resolvedSchoolId}});
 }));
 
-authRouter.post('/register-school', asyncRoute(async (req, res) => {
-  const data = registerSchoolSchema.parse(req.body);
-  const client = await platformPool.connect();
-  try {
-    await client.query('BEGIN');
-    const existing = await client.query('SELECT id FROM users WHERE lower(email)=lower($1)', [data.email]);
-    if (existing.rows[0]) {
-      fail(409, 'An account with this email already exists. Please sign in instead.');
-    }
-    let plan = await client.query("SELECT id, name, billing_interval, trial_days FROM subscription_plans WHERE billing_interval='trial' AND is_active LIMIT 1");
-    if (!plan.rows[0]) {
-      plan = await client.query("SELECT id, name, billing_interval, trial_days FROM subscription_plans WHERE is_active ORDER BY created_at LIMIT 1");
-    }
-    if (!plan.rows[0]) fail(500, 'No active subscription plan configured');
-
-    const inserted = await client.query(
-      `INSERT INTO schools(name, address, contact_email, contact_phone, school_type, status)
-       VALUES($1, '', lower($2), $3, $4, 'active')
-       RETURNING id, school_id, name, status, created_at`,
-      [data.schoolName, data.email, data.phone || '', data.schoolType || 'general']
-    );
-    const school = inserted.rows[0];
-    await client.query("SELECT set_config('app.school_id', $1, true)", [school.id]);
-    await client.query('INSERT INTO school_settings(school_id, academic_year_label) VALUES($1, $2)', [school.id, '2026-2027']);
-
-    const subStatus = plan.rows[0].billing_interval === 'trial' ? 'trialing' : 'active';
-    await client.query(
-      `INSERT INTO subscriptions(school_id, plan_id, status, expires_at)
-       VALUES($1, $2, $3, CASE $4 WHEN 'trial' THEN now()+make_interval(days=>$5) WHEN 'monthly' THEN now()+interval '1 month' WHEN 'annual' THEN now()+interval '1 year' ELSE NULL END)`,
-      [school.id, plan.rows[0].id, subStatus, plan.rows[0].billing_interval, plan.rows[0].trial_days || 30]
-    );
-
-    const roleRow = await client.query("SELECT id, code, name FROM school_roles WHERE school_id=$1 AND code='school_administrator'", [school.id]);
-    if (!roleRow.rows[0]) fail(500, 'School administrator role not initialized');
-
-    const passwordHash = await argon2.hash(data.password, { type: argon2.argon2id });
-    const userResult = await client.query(
-      `INSERT INTO users(email, name, password_hash, is_active)
-       VALUES(lower($1), $2, $3, true)
-       RETURNING id, name`,
-      [data.email, data.administratorName, passwordHash]
-    );
-    const user = userResult.rows[0];
-
-    await client.query(
-      `INSERT INTO school_memberships(school_id, user_id, role, school_role_id, is_active)
-       VALUES($1, $2, 'school_admin', $3, true)`,
-      [school.id, user.id, roleRow.rows[0].id]
-    );
-
-    const permissions = await client.query(
-      'SELECT permission_key FROM school_role_permissions WHERE school_id=$1 AND role_id=$2',
-      [school.id, roleRow.rows[0].id]
-    );
-
-    await client.query(
-      "INSERT INTO audit_logs(school_id, action, target_type, target_id, metadata) VALUES($1, 'school.registered', 'user', $2, $3)",
-      [school.id, user.id, JSON.stringify({ schoolId: school.school_id, schoolName: school.name })]
-    );
-
-    await client.query('COMMIT');
-
-    const accessToken = await issueSession('school', user.id, {
-      kind: 'school',
-      id: user.id,
-      role: 'school_admin',
-      schoolId: school.id
-    }, res);
-
-    res.status(201).json({
-      accessToken,
-      user: {
-        id: user.id,
-        name: user.name,
-        role: 'school_admin',
-        schoolRole: roleRow.rows[0].code,
-        schoolRoleName: roleRow.rows[0].name,
-        permissions: permissions.rows.map(r => r.permission_key),
-        schoolId: school.school_id
-      },
-      school: {
-        id: school.id,
-        schoolId: school.school_id,
-        name: school.name
-      }
-    });
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+authRouter.post('/register-school', asyncRoute(async (_req, res) => {
+  // SaaS Security Rule: Schools cannot publicly self-register as new tenants.
+  // Tenant provisioning is strictly managed by CalmStacks Platform Administrators.
+  return res.status(403).json({
+    error: 'school_registration_disabled',
+    message: 'Public school self-registration is disabled. Please contact the CalmStacks platform team to onboard and provision your school workspace.'
+  });
 }));
 
 authRouter.post('/google', asyncRoute(async (req, res) => {
@@ -908,17 +823,15 @@ authRouter.post('/recovery/request',asyncRoute(async(req,res)=>{
         message: `An invitation is pending for ${schoolRow.name}. Complete your initial setup to choose a password and enter your workspace.`,
         schoolId: schoolRow.school_id,
         schoolName: schoolRow.name,
-        invitationUrl: inviteUrl,
-        developmentUrl: inviteUrl,
+        ...(env.NODE_ENV !== 'production' ? { invitationUrl: inviteUrl, developmentUrl: inviteUrl } : {}),
       });
     }
   }
 
   if(!account){
     return res.json({
-      success: false,
-      message: 'If the account is eligible, recovery instructions have been sent.',
-      notFound: true
+      success: true,
+      message: 'If the account is eligible, recovery instructions have been sent.'
     });
   }
 
@@ -944,7 +857,7 @@ authRouter.post('/recovery/request',asyncRoute(async(req,res)=>{
     schoolId: schoolRow?.school_id,
     schoolName: schoolRow?.name,
     schoolNotice,
-    developmentUrl,
+    ...(env.NODE_ENV !== 'production' ? { developmentUrl } : {}),
     emailDelivered
   });
 }));

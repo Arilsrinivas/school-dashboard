@@ -70,7 +70,15 @@ platformRouter.post('/schools',asyncRoute(async(req,res)=>{
     const origin = (req.headers.origin as string) || (req.headers.host ? `${req.protocol || 'https'}://${req.headers.host}` : null);
     const baseUrl = origin ? `${origin}/accept-invitation` : (process.env.INVITATION_BASE_URL || 'http://localhost:5173/accept-invitation');
     const inviteUrl = `${baseUrl}?token=${token}`;
-    res.status(201).json({school,invitation:{email:data.administratorEmail,expiresInHours:Number(process.env.INVITATION_TTL_HOURS||72),deliveryStatus,inviteUrl,developmentUrl:inviteUrl}});
+    res.status(201).json({
+      school,
+      invitation: {
+        email: data.administratorEmail,
+        expiresInHours: Number(process.env.INVITATION_TTL_HOURS || 72),
+        deliveryStatus,
+        ...(process.env.NODE_ENV !== 'production' ? { inviteUrl, developmentUrl: inviteUrl } : {})
+      }
+    });
   } catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }));
 
@@ -83,7 +91,12 @@ platformRouter.post('/schools/:id/invitation/resend',asyncRoute(async(req,res)=>
   const origin = (req.headers.origin as string) || (req.headers.host ? `${req.protocol || 'https'}://${req.headers.host}` : null);
   const baseUrl = origin ? `${origin}/accept-invitation` : (process.env.INVITATION_BASE_URL || 'http://localhost:5173/accept-invitation');
   const inviteUrl = `${baseUrl}?token=${token}`;
-  res.json({email:result.rows[0].email,expiresInHours:Number(process.env.INVITATION_TTL_HOURS||72),deliveryStatus,inviteUrl,developmentUrl:inviteUrl});
+  res.json({
+    email: result.rows[0].email,
+    expiresInHours: Number(process.env.INVITATION_TTL_HOURS || 72),
+    deliveryStatus,
+    ...(process.env.NODE_ENV !== 'production' ? { inviteUrl, developmentUrl: inviteUrl } : {})
+  });
 }));
 
 platformRouter.patch('/schools/:id/status',asyncRoute(async(req,res)=>{
@@ -137,8 +150,24 @@ schoolRouter.patch('/settings',authenticate,requireSchoolPermission('school:sett
 schoolRouter.get('/students',authenticate,requireSchoolPermission('students:read','students:read:assigned','students:read:linked','students:read:self'),asyncRoute(async(req,res)=>{
   const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||20)),search=typeof req.query.search==='string'?req.query.search.trim().slice(0,100):'',yearId=typeof req.query.academicYearId==='string'?z.uuid().parse(req.query.academicYearId):null;
   let scope='($4::uuid IS NOT NULL OR $4::uuid IS NULL)';if(!req.permissions!.includes('students:read')){if(req.permissions!.includes('students:read:assigned'))scope=`EXISTS(SELECT 1 FROM student_enrollments se2 JOIN classes c2 ON c2.school_id=se2.school_id AND c2.id=se2.class_id JOIN class_subjects cs2 ON cs2.school_id=c2.school_id AND cs2.class_id=c2.id JOIN teacher_assignments ta2 ON ta2.school_id=cs2.school_id AND ta2.class_subject_id=cs2.id JOIN teachers t2 ON t2.school_id=ta2.school_id AND t2.id=ta2.teacher_id WHERE se2.school_id=st.school_id AND se2.student_id=st.id AND se2.status='active' AND t2.user_id=$4::uuid AND (ta2.section_id IS NULL OR ta2.section_id=se2.section_id))`;else if(req.permissions!.includes('students:read:linked'))scope=`EXISTS(SELECT 1 FROM parents p2 JOIN student_parents sp2 ON sp2.school_id=p2.school_id AND sp2.parent_id=p2.id WHERE p2.school_id=st.school_id AND p2.user_id=$4::uuid AND sp2.student_id=st.id)`;else scope='st.user_id=$4::uuid';}
+  const canReadMedical = Boolean(req.permissions?.includes('students:medical:read'));
   const params=[req.tenant!.id,`%${search}%`,yearId,req.identity!.id,limit,(page-1)*limit];
-  const data=await tenantTransaction(req.tenant!.id,async(client)=>{const items=await client.query(`SELECT st.id,st.admission_number,st.first_name,st.last_name,st.date_of_birth,st.status,e.class_id,c.name AS class_name,e.section_id,se.name AS section_name,e.academic_year_id,y.name AS academic_year_name FROM students st LEFT JOIN student_enrollments e ON e.school_id=st.school_id AND e.student_id=st.id AND e.status='active' LEFT JOIN classes c ON c.school_id=e.school_id AND c.id=e.class_id LEFT JOIN sections se ON se.school_id=e.school_id AND se.id=e.section_id LEFT JOIN academic_years y ON y.school_id=e.school_id AND y.id=e.academic_year_id WHERE st.school_id=$1 AND ($2='' OR st.first_name ILIKE $2 OR st.last_name ILIKE $2 OR st.admission_number ILIKE $2) AND ($3::uuid IS NULL OR e.academic_year_id=$3) AND (${scope}) ORDER BY st.last_name,st.first_name LIMIT $5 OFFSET $6`,params);const count=await client.query(`SELECT count(*)::int AS total FROM students st LEFT JOIN student_enrollments e ON e.school_id=st.school_id AND e.student_id=st.id AND e.status='active' WHERE st.school_id=$1 AND ($2='' OR st.first_name ILIKE $2 OR st.last_name ILIKE $2 OR st.admission_number ILIKE $2) AND ($3::uuid IS NULL OR e.academic_year_id=$3) AND (${scope})`,params.slice(0,4));return {items:items.rows,total:count.rows[0].total};});res.json({...data,page,limit});
+  const data=await tenantTransaction(req.tenant!.id,async(client)=>{
+    const items=await client.query(`SELECT st.id,st.admission_number,st.first_name,st.last_name,st.date_of_birth,st.status,
+      ${canReadMedical ? 'st.medical_notes, st.emergency_contact' : 'NULL::text AS medical_notes, NULL::jsonb AS emergency_contact'},
+      e.class_id,c.name AS class_name,e.section_id,se.name AS section_name,e.academic_year_id,y.name AS academic_year_name
+      FROM students st
+      LEFT JOIN student_enrollments e ON e.school_id=st.school_id AND e.student_id=st.id AND e.status='active'
+      LEFT JOIN classes c ON c.school_id=e.school_id AND c.id=e.class_id
+      LEFT JOIN sections se ON se.school_id=e.school_id AND se.id=e.section_id
+      LEFT JOIN academic_years y ON y.school_id=e.school_id AND y.id=e.academic_year_id
+      WHERE st.school_id=$1 AND ($2='' OR st.first_name ILIKE $2 OR st.last_name ILIKE $2 OR st.admission_number ILIKE $2)
+        AND ($3::uuid IS NULL OR e.academic_year_id=$3) AND (${scope})
+      ORDER BY st.last_name,st.first_name LIMIT $5 OFFSET $6`,params);
+    const count=await client.query(`SELECT count(*)::int AS total FROM students st LEFT JOIN student_enrollments e ON e.school_id=st.school_id AND e.student_id=st.id AND e.status='active' WHERE st.school_id=$1 AND ($2='' OR st.first_name ILIKE $2 OR st.last_name ILIKE $2 OR st.admission_number ILIKE $2) AND ($3::uuid IS NULL OR e.academic_year_id=$3) AND (${scope})`,params.slice(0,4));
+    return {items:items.rows,total:count.rows[0].total};
+  });
+  res.json({...data,page,limit});
 }));
 schoolRouter.post('/students',authenticate,requireSchoolPermission('students:admit'),asyncRoute(async(req,res)=>{
   const data=studentSchema.parse(req.body),created=await tenantTransaction(req.tenant!.id,async(client)=>{if(data.sectionId){const section=await client.query('SELECT 1 FROM sections WHERE school_id=$1 AND id=$2 AND class_id=$3',[req.tenant!.id,data.sectionId,data.classId]);if(!section.rowCount)fail(400,'Section does not belong to the selected class');}const student=await client.query('INSERT INTO students(school_id,admission_number,first_name,last_name,date_of_birth) VALUES($1,$2,$3,$4,$5) RETURNING id,admission_number,first_name,last_name,date_of_birth,status',[req.tenant!.id,data.admissionNumber,data.firstName,data.lastName,data.dateOfBirth??null]);await client.query('INSERT INTO student_enrollments(school_id,student_id,academic_year_id,class_id,section_id) VALUES($1,$2,$3,$4,$5)',[req.tenant!.id,student.rows[0].id,data.academicYearId,data.classId,data.sectionId??null]);return student.rows[0];});
