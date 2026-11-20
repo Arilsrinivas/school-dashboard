@@ -24,7 +24,7 @@ test('E2E Full Production Lifecycle: Provisioning -> Academics -> Attendance -> 
   }
   await db.exec(`
     CREATE ROLE educonnect_app LOGIN NOBYPASSRLS;
-    CREATE ROLE educonnect_platform LOGIN BYPASSRLS;
+    CREATE ROLE educonnect_platform LOGIN NOBYPASSRLS;
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform;
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;
   `);

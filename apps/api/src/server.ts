@@ -17,13 +17,18 @@ import { timetableRouter } from './timetable/routes.js';
 import { feesRouter } from './fees/routes.js';
 import { announcementsRouter } from './announcements/routes.js';
 import { reportsRouter } from './reports/routes.js';
+import { storageRouter } from './storage/routes.js';
 import { HttpError } from './http.js';
-import { pool, platformPool } from './db/pool.js';
+import { pool, platformPool, verifyRuntimeDatabaseRoles } from './db/pool.js';
+import { configureProxyTrust } from './proxy.js';
 
 const APPROVED_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+-arilsrinivas-projects\.vercel\.app$/;
 const APPROVED_PROD_DOMAIN = 'https://school-dashboard-nine-rho.vercel.app';
 
 export const app=express();
+// Vercel's edge overwrites X-Forwarded-For before forwarding to the function.
+// Trust exactly that one hop in its runtime; trust no forwarded headers locally.
+configureProxyTrust(app, process.env.VERCEL === '1');
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({
@@ -44,10 +49,18 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization']
+  allowedHeaders: ['Content-Type','Authorization','X-EduConnect-School-ID','X-EduConnect-Legacy-Token']
 }));
 app.use(compression());
 app.use(express.json({limit:'1mb'}));
+
+let runtimeRoleCheckAt=0;
+let runtimeRoleCheck:Promise<void>|null=null;
+app.use((_req,_res,next)=>{
+  if(env.NODE_ENV!=='production'||Date.now()-runtimeRoleCheckAt<30_000)return next();
+  runtimeRoleCheck??=verifyRuntimeDatabaseRoles().then(()=>{runtimeRoleCheckAt=Date.now();}).finally(()=>{runtimeRoleCheck=null;});
+  void runtimeRoleCheck.then(()=>next()).catch(next);
+});
 
 // Controlled Migration Execution Check:
 // In production, migrations must be executed via controlled CI/CD pipeline or deployment task (`npm run db:migrate`).
@@ -70,6 +83,7 @@ if (process.env.NODE_ENV === 'development' && process.env.AUTO_MIGRATE === 'true
 
 app.get(['/health', '/api/health'], async (_req, res) => {
   try {
+    if(env.NODE_ENV==='production') await verifyRuntimeDatabaseRoles();
     await pool.query('SELECT 1');
     await platformPool.query('SELECT 1');
     res.json({
@@ -102,6 +116,7 @@ app.use(['/api/school', '/school'], timetableRouter);
 app.use(['/api/school/fees', '/school/fees'], feesRouter);
 app.use(['/api/school', '/school'], announcementsRouter);
 app.use(['/api/school', '/school'], reportsRouter);
+app.use(['/api/school', '/school'], storageRouter);
 app.use((_req,res)=>res.status(404).json({error:'Not found'}));
 app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
   if(error instanceof HttpError)return res.status(error.status).json({error:error.message});

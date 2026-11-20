@@ -16,6 +16,7 @@
     "firebase:deploy": "npm run build && firebase deploy --only hosting",
     "test": "npm run test --workspace apps/api",
     "test:e2e": "npm --workspace apps/api run test:e2e",
+    "test:postgres-security": "npm --workspace apps/api run test:postgres-security",
     "db:migrate": "npm --workspace apps/api run db:migrate",
     "db:bootstrap-admin": "npm --workspace apps/api run db:bootstrap-admin",
     "db:clean-demo": "tsx scripts/clean-demo-data.ts"

@@ -15,7 +15,7 @@ function getSslConfig(url: string) {
   if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
     return undefined;
   }
-  return { rejectUnauthorized: false };
+  return { rejectUnauthorized: true };
 }
 
 export const pool = new pg.Pool({
@@ -34,6 +34,31 @@ export const platformPool = new pg.Pool({
   ssl: getSslConfig(env.PLATFORM_DATABASE_URL)
 });
 
+export async function verifyRuntimeDatabaseRoles(): Promise<void> {
+  const check = async (runtimePool: pg.Pool, expectedRole: string) => {
+    const { rows } = await runtimePool.query<{ role_name:string; privileged:boolean }>(`
+      WITH RECURSIVE role_tree(role_oid, privileged) AS (
+        SELECT oid, rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user
+        UNION
+        SELECT granted.oid, granted.rolsuper OR granted.rolbypassrls
+          FROM pg_auth_members membership
+          JOIN role_tree member_role ON member_role.role_oid=membership.member
+          JOIN pg_roles granted ON granted.oid=membership.roleid
+      )
+      SELECT current_user AS role_name,COALESCE(bool_or(privileged),true) AS privileged
+        FROM role_tree
+    `);
+    const role = rows[0];
+    if (!role || role.role_name !== expectedRole || role.privileged) {
+      throw new Error(`Database runtime role must be ${expectedRole} and must not be superuser, inherit a privileged role, or bypass RLS`);
+    }
+  };
+  await Promise.all([
+    check(pool, 'educonnect_app'),
+    check(platformPool, 'educonnect_platform')
+  ]);
+}
+
 pool.on('error', (err) => {
   console.warn('[DB Pool] Non-fatal client error:', err.message);
 });
@@ -45,12 +70,16 @@ platformPool.on('error', (err) => {
 export type DbClient = pg.PoolClient;
 
 export async function tenantTransaction<T>(schoolId: string, fn: (client: DbClient) => Promise<T>): Promise<T> {
+  return tenantTransactionUsing(pool, schoolId, fn);
+}
+
+export async function tenantTransactionUsing<T>(dbPool: pg.Pool, schoolId: string, fn: (client: DbClient) => Promise<T>): Promise<T> {
   let client: DbClient;
   try {
-    client = await pool.connect();
+    client = await dbPool.connect();
   } catch (err) {
     // Retry once if an idle connection timed out
-    client = await pool.connect();
+    client = await dbPool.connect();
   }
   try {
     await client.query('BEGIN');

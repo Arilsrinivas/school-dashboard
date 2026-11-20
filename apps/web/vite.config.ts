@@ -13,5 +13,17 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('lucide-react')) return 'icons';
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react-vendor';
+          if (/[\\/]node_modules[\\/](react-router|@remix-run)[\\/]/.test(id)) return 'router-vendor';
+          if (id.includes('@tanstack/react-query')) return 'query-vendor';
+          if (id.includes('react-hook-form') || id.includes('@hookform')) return 'forms-vendor';
+        },
+      },
+    },
   },
 });

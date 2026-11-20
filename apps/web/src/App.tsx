@@ -1,23 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
-import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, request, restoreSession, type School, type User, type GoogleAuthResult } from './api';
-import AttendanceWorkspace from './AttendanceWorkspace';
-import HomeworkWorkspace from './HomeworkWorkspace';
-import ExamsWorkspace from './ExamsWorkspace';
-import TimetableWorkspace from './TimetableWorkspace';
-import FeesWorkspace from './FeesWorkspace';
-import AnnouncementsWorkspace from './AnnouncementsWorkspace';
-import ReportsWorkspace from './ReportsWorkspace';
-import SettingsWorkspace from './SettingsWorkspace';
-import NotificationBell from './NotificationBell';
+import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, request, restoreSession, sendFirebasePasswordReset, type School, type User, type GoogleAuthResult } from './api';
+const AttendanceWorkspace = lazy(() => import('./AttendanceWorkspace'));
+const HomeworkWorkspace = lazy(() => import('./HomeworkWorkspace'));
+const ExamsWorkspace = lazy(() => import('./ExamsWorkspace'));
+const TimetableWorkspace = lazy(() => import('./TimetableWorkspace'));
+const FeesWorkspace = lazy(() => import('./FeesWorkspace'));
+const AnnouncementsWorkspace = lazy(() => import('./AnnouncementsWorkspace'));
+const ReportsWorkspace = lazy(() => import('./ReportsWorkspace'));
+const SettingsWorkspace = lazy(() => import('./SettingsWorkspace'));
+const NotificationBell = lazy(() => import('./NotificationBell'));
 import SchoollogLanding from './SchoollogLanding';
-import AdmissionsWorkspace from './AdmissionsWorkspace';
-import TransportWorkspace from './TransportWorkspace';
+import { useFirebaseAuth } from './auth/firebase';
+import { firebaseConfigured } from './auth/firebase';
+import StudentDocuments from './StudentDocuments';
+const AdmissionsWorkspace = lazy(() => import('./AdmissionsWorkspace'));
+const TransportWorkspace = lazy(() => import('./TransportWorkspace'));
 
 type Overview={schools:{total_schools:number;active_schools:number;suspended_schools:number;pending_schools:number};total_users:number;total_students:number;total_teachers:number;total_parents:number;growth:{month:string;schools:number}[]};
 type Plans={items:{id:string;name:string;billing_interval:string;price_minor:number|null;currency:string}[]};
@@ -27,29 +30,32 @@ const dateLabel=(value:string)=>new Intl.DateTimeFormat('en-IN',{day:'2-digit',m
 const money=(minor:number|null,currency='INR')=>minor===null?'Configured per contract':new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(minor/100);
 
 export default function App(){
+  const firebaseState=useFirebaseAuth();
   const [user,setUser]=useState<User|null>(null),[ready,setReady]=useState(false);
   const [view, setView] = useState<'landing' | 'portal' | 'admissions' | 'transport'>('landing');
   const [demoOpen, setDemoOpen] = useState(false);
 
-  useEffect(()=>{restoreSession().then(async ok=>{if(ok){try{const me=await request<{user:User}>('/api/auth/me');setUser(me.user);}catch{await logout();}}setReady(true);});},[]);
+  useEffect(()=>{if(firebaseState.configured&&!firebaseState.ready)return;restoreSession().then(async ok=>{if(ok){try{const me=await request<{user:User}>('/api/auth/me');setUser(me.user);}catch{await logout();}}setReady(true);});},[firebaseState.configured,firebaseState.ready]);
   if(window.location.pathname==='/accept-invitation')return <InvitationPage/>;
   if(window.location.pathname==='/recover-account')return <RecoveryPage/>;
   if(!ready)return <div className="grid min-h-screen place-items-center text-sm text-muted">Opening your workspace…</div>;
 
   if (user) {
-    return user.role==='super_admin' ? (
-      <ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>
-    ) : user.role==='support_agent' ? (
-      <SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>
-    ) : (
-      <SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>
-    );
+    return <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening your workspace…</div>}>
+      {user.role==='super_admin' ? (
+        <ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+      ) : user.role==='support_agent' ? (
+        <SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+      ) : (
+        <SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+      )}
+    </Suspense>;
   }
 
   // Schoollog Public Experience & Portal Router
   if (view === 'admissions') {
     return (
-      <div>
+      <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Admissions…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Admissions CRM // Public Preview</div>
           <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
@@ -57,13 +63,13 @@ export default function App(){
           </button>
         </div>
         <AdmissionsWorkspace />
-      </div>
+      </div></Suspense>
     );
   }
 
   if (view === 'transport') {
     return (
-      <div>
+      <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Transport…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Bus GPS Fleet // Live Preview</div>
           <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
@@ -71,7 +77,7 @@ export default function App(){
           </button>
         </div>
         <TransportWorkspace />
-      </div>
+      </div></Suspense>
     );
   }
 
@@ -294,7 +300,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         setGoogleOpen(false);
         setLinkingPassword('');
         setLinkingError('');
-        setLinkingState({ email: result.email, name: result.name, token });
+        setLinkingState({ email: result.email, name: result.name, token: result.firebaseCredential??token });
       } else if (result.type === 'requireSchoolSelection') {
         setGoogleOpen(false);
         setMultiSchoolState({ token, schools: result.schools });
@@ -321,6 +327,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
       const res = await linkGoogleAccount({
         credential: linkingState.token,
         password: linkingPassword,
+        schoolId:loginSchoolId||undefined,
       });
       if (res.user) {
         localStorage.setItem('educonnect_has_account', 'true');
@@ -353,6 +360,8 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
 
   async function handleGoogleClick() {
     setError('');
+
+    if(firebaseConfigured){await executeGoogleToken('firebase');return;}
 
     // Google Identity Services (GSI)
     const googleGSI = (window as any).google?.accounts?.id;
@@ -789,6 +798,9 @@ function RecoveryPage(){
         setMessage('Password updated successfully. You can sign in with your new password now.');
         setSuccessComplete(true);
         setPassword('');
+      }else if(firebaseConfigured){
+        await sendFirebasePasswordReset(email);
+        setMessage('If the account can sign in with Firebase, password reset instructions have been sent.');
       }else{
         const result=await request<{success?:boolean;message:string;schoolId?:string;schoolName?:string;developmentUrl?:string;invitationUrl?:string;notFound?:boolean}>('/api/auth/recovery/request',{
           method:'POST',
@@ -1370,7 +1382,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
         </>}
       </div>
     </div>}
-  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='admissions'?<AdmissionsWorkspace/>:tab==='transport'?<TransportWorkspace/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
+  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='admissions'?<AdmissionsWorkspace/>:tab==='transport'?<TransportWorkspace/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th><th>FILES</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td><td><StudentDocuments studentId={st.id} studentName={st.first_name+' '+st.last_name}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
   {(bulkError||addYear.isError||addClass.isError||addStudent.isError||bulkImport.isError)&&<div className="error-inline school-error">{bulkError||((addYear.error||addClass.error||addStudent.error||bulkImport.error) as Error).message}</div>}{dialog&&<div className="modal-backdrop"><section className="modal school-modal"><div className="modal-head"><div><div className="eyebrow">SCHOOL SETUP</div><h2>{dialog==='year'?'Add academic year':dialog==='class'?'Add a class':'Admit a student'}</h2><p>Records are saved to this school workspace.</p></div><button className="icon-button" onClick={()=>setDialog(null)}><X size={19}/></button></div>{dialog==='year'?<YearForm pending={addYear.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addYear.mutate(v)}/>:dialog==='class'?<ClassForm years={years.data?.items||[]} pending={addClass.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addClass.mutate(v)}/>:<StudentForm years={years.data?.items||[]} classes={classes.data?.items||[]} pending={addStudent.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addStudent.mutate(v)}/>}</section></div>}
   {/* Mobile Bottom Navigation Bar */}
   <nav className="school-bottom-nav" aria-label="Quick Mobile Navigation">
