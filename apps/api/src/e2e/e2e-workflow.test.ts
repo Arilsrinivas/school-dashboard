@@ -14,6 +14,7 @@ process.env.INVITATION_BASE_URL = 'http://localhost:5173/accept-invitation';
 test('E2E Full Production Lifecycle: Provisioning -> Academics -> Attendance -> Homework -> Exams -> Timetable -> Fees -> Announcements -> Reports -> Tenant Isolation', { timeout: 180_000 }, async () => {
   console.log('[E2E] 1. Initializing PGlite...');
   const db = await PGlite.create();
+    await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   const migrationDir = new URL('../../migrations/', import.meta.url);
   const migrationNames = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
   for (const name of migrationNames) {
@@ -23,8 +24,6 @@ test('E2E Full Production Lifecycle: Provisioning -> Academics -> Attendance -> 
     await db.exec(sql);
   }
   await db.exec(`
-    CREATE ROLE educonnect_app LOGIN NOBYPASSRLS;
-    CREATE ROLE educonnect_platform LOGIN NOBYPASSRLS;
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform;
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;
   `);

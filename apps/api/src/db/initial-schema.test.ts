@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 test('consolidated EduConnect schema initializes an empty PostgreSQL-compatible database with tenant RLS',async()=>{
   const db=await PGlite.create();
   try{
+    await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
     let sql=await readFile(new URL('../../schema/educonnect.initial.sql',import.meta.url),'utf8');
     sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/,'');
     await db.exec(sql);

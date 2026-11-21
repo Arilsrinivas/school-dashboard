@@ -14,8 +14,9 @@ process.env.FIREBASE_SERVICE_ACCOUNT_JSON=JSON.stringify({type:'service_account'
 
 test('Firebase ID tokens resolve only explicitly linked active EduConnect accounts and school memberships',async()=>{
   const db=await PGlite.create();const migrationDir=new URL('../../migrations/',import.meta.url);
+    await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   for(const name of (await readdir(migrationDir)).filter(name=>name.endsWith('.sql')).sort()){let sql=await readFile(new URL(name,migrationDir),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/,'');await db.exec(sql);}
-  await db.exec('CREATE ROLE educonnect_app LOGIN NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOBYPASSRLS; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;');
+  await db.exec('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;');
   const socket=new PGLiteSocketServer({db,host:'127.0.0.1',port:0,maxConnections:12});await socket.start();const port=Number(socket.getServerConn().split(':').at(-1));
   process.env.DATABASE_URL=`postgresql://educonnect_app@127.0.0.1:${port}/postgres?sslmode=disable`;process.env.PLATFORM_DATABASE_URL=`postgresql://educonnect_platform@127.0.0.1:${port}/postgres?sslmode=disable`;process.env.MIGRATION_DATABASE_URL=process.env.PLATFORM_DATABASE_URL;
   const [{pool,platformPool,tenantTransaction},{signAccess,hashRefresh,newRefreshSecret},{authRouter},{setFirebaseTokenVerifierForTest,initializeFirebaseAdmin}]=await Promise.all([import('../db/pool.js'),import('./tokens.js'),import('./routes.js'),import('./firebase-admin.js')]);

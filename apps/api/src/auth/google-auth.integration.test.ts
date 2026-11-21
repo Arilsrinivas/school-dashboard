@@ -14,6 +14,7 @@ process.env.GOOGLE_CLIENT_ID = 'test-google-client-id-12345';
 
 test('Google Authentication integration, token verification, account linking, school access and revocation', async () => {
   const db = await PGlite.create();
+    await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   const migrationDir = new URL('../../migrations/', import.meta.url);
   const migrationNames = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
   for (const name of migrationNames) {
@@ -21,7 +22,7 @@ test('Google Authentication integration, token verification, account linking, sc
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/, '');
     await db.exec(sql);
   }
-  await db.exec('CREATE ROLE educonnect_app LOGIN NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOBYPASSRLS; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;');
+  await db.exec('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;');
   const socket = new PGLiteSocketServer({ db, host: '127.0.0.1', port: 0, maxConnections: 16 });
   await socket.start();
   const port = Number(socket.getServerConn().split(':').at(-1));

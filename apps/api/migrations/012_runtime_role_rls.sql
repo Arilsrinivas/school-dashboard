@@ -1,13 +1,50 @@
--- Runtime roles must be ordinary, non-superuser, non-BYPASSRLS logins.
+-- Runtime roles are provisioned by the operator before schema initialization.
+-- Supabase's managed postgres role is not a PostgreSQL superuser and cannot
+-- change managed role attributes, so fail closed if either role is missing or
+-- has privileges that would defeat tenant RLS.
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='educonnect_app') THEN
-    ALTER ROLE educonnect_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_roles
+     WHERE rolname='educonnect_app' AND rolcanlogin AND NOT rolsuper
+       AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit
+       AND NOT rolbypassrls AND NOT rolreplication
+  ) THEN
+    RAISE EXCEPTION 'educonnect_app must be provisioned as a least-privilege, non-BYPASSRLS login before schema initialization';
   END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='educonnect_platform') THEN
-    ALTER ROLE educonnect_platform NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_roles
+     WHERE rolname='educonnect_platform' AND rolcanlogin AND NOT rolsuper
+       AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit
+       AND NOT rolbypassrls AND NOT rolreplication
+  ) THEN
+    RAISE EXCEPTION 'educonnect_platform must be provisioned as a least-privilege, non-BYPASSRLS login before schema initialization';
   END IF;
 END $$;
+
+-- Provider-managed `postgres` owns the initial schema. Grant only DML needed
+-- by the APIs; row-level policies remain the authority for row visibility.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE ON SCHEMA public TO educonnect_app, educonnect_platform;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO educonnect_app, educonnect_platform;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO educonnect_app, educonnect_platform;
+DO $$
+DECLARE api_role text;
+BEGIN
+  -- EduConnect uses its own API and Firebase identity. Supabase's PostgREST
+  -- roles must not receive a second, direct path to school records.
+  FOR api_role IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE ALL PRIVILEGES ON SCHEMA public FROM %I', api_role);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM %I', api_role);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM %I', api_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL PRIVILEGES ON TABLES FROM %I', api_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL PRIVILEGES ON SEQUENCES FROM %I', api_role);
+  END LOOP;
+END $$;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO educonnect_app, educonnect_platform;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO educonnect_app, educonnect_platform;
 
 -- Force RLS for all application tables that already use it. This intentionally
 -- discovers tables from the catalog so newly added modules are not omitted.

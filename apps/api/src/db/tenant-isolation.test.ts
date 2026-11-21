@@ -14,7 +14,7 @@ process.env.REFRESH_TOKEN_SECRET='different-local-test-refresh-secret-long-enoug
 
 test('school authority, tenant isolation, parent and teacher scopes, and approved support access use PostgreSQL',async()=>{
   const db=await PGlite.create();
-  await db.exec('CREATE ROLE educonnect_app LOGIN NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN BYPASSRLS;');
+  await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   const migrationDir=new URL('../../migrations/',import.meta.url);
   const migrationNames=(await readdir(migrationDir)).filter(name=>name.endsWith('.sql')).sort();
   assert.deepEqual(MIGRATION_SCRIPTS.map(migration=>migration.name).sort(),migrationNames,'the deployable migration bundle contains every migration file');
