@@ -97,13 +97,13 @@ export default function TransportWorkspace() {
     <div style={{ padding: '24px', maxWidth: '1240px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <Bus size={14} /> Schoollog Transport &amp; Fleet Safety
+          <Bus size={14} /> EduConnect Transport · Simulation with sample data
         </div>
         <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px', letterSpacing: '-0.02em' }}>
-          Live Bus GPS Tracking &amp; RFID Attendance
+          Transport Management Preview · GPS and RFID are not connected
         </h1>
         <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-          Real-time vehicle telemetry, approaching-stop parent SMS alerts, and onboard student counts.
+          Sample routes only. Live vehicle telemetry and parent SMS alerts are unavailable until providers are configured.
         </p>
       </div>
 

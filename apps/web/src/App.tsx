@@ -15,7 +15,7 @@ const AnnouncementsWorkspace = lazy(() => import('./AnnouncementsWorkspace'));
 const ReportsWorkspace = lazy(() => import('./ReportsWorkspace'));
 const SettingsWorkspace = lazy(() => import('./SettingsWorkspace'));
 const NotificationBell = lazy(() => import('./NotificationBell'));
-import SchoollogLanding from './SchoollogLanding';
+import EduConnectLanding from './EduConnectLanding';
 import { useFirebaseAuth } from './auth/firebase';
 import { firebaseConfigured } from './auth/firebase';
 import StudentDocuments from './StudentDocuments';
@@ -52,12 +52,12 @@ export default function App(){
     </Suspense>;
   }
 
-  // Schoollog Public Experience & Portal Router
+  // EduConnect public experience and portal router
   if (view === 'admissions') {
     return (
       <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Admissions…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Admissions CRM // Public Preview</div>
+          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>EduConnect Admissions // Simulation with sample data</div>
           <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
             ← Back to Home
           </button>
@@ -71,7 +71,7 @@ export default function App(){
     return (
       <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Transport…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Bus GPS Fleet // Live Preview</div>
+          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>EduConnect Transport // Simulation with sample data; GPS is not connected</div>
           <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
             ← Back to Home
           </button>
@@ -85,9 +85,9 @@ export default function App(){
     return (
       <div>
         <div style={{ background: '#09131f', padding: '10px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '13px' }}>erp.schoollog.in // Unified Institution Login</div>
+          <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '13px' }}>EduConnect // School workspace sign in</div>
           <button onClick={() => setView('landing')} style={{ background: 'transparent', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '12px' }}>
-            ← Return to Schoollog Home
+            ← Return to EduConnect Home
           </button>
         </div>
         <AuthPortal onLogin={setUser}/>
@@ -97,7 +97,7 @@ export default function App(){
 
   return (
     <>
-      <SchoollogLanding
+      <EduConnectLanding
         onOpenDemo={() => setDemoOpen(true)}
         onGoToLogin={() => setView('portal')}
         onExploreModule={(mod) => {
@@ -107,13 +107,13 @@ export default function App(){
         }}
       />
       {demoOpen && (
-        <SchoollogDemoModal onClose={() => setDemoOpen(false)} />
+        <EduConnectContactModal onClose={() => setDemoOpen(false)} />
       )}
     </>
   );
 }
 
-function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
+function EduConnectContactModal({ onClose }: { onClose: () => void }) {
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -137,7 +137,7 @@ function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
             <div className="sl-brand-mark" style={{ width: '28px', height: '28px' }}>
               <GraduationCap size={16} />
             </div>
-            <strong style={{ fontSize: '16px', color: '#0f172a' }}>Book a Live Schoollog Demo</strong>
+            <strong style={{ fontSize: '16px', color: '#0f172a' }}>Contact CalmStacks about EduConnect</strong>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
             <X size={18} />
@@ -149,9 +149,9 @@ function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
               <Check size={28} />
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Demo Request Received!</h3>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Request noted on this device</h3>
             <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px' }}>
-              Our institutional solution consultant will connect with <strong>{form.name}</strong> at <strong>{form.phone}</strong> to walk through Schoollog tailored for <strong>{form.schoolName}</strong>.
+              This demo request is a local prototype and has not been sent. Contact CalmStacks to arrange an EduConnect walkthrough for <strong>{form.schoolName}</strong>.
             </p>
             <button onClick={onClose} className="sl-btn-primary" style={{ width: '100%' }}>
               Done
@@ -1104,7 +1104,7 @@ function SchoolOverviewView({
               <GraduationCap size={16} /> <span>Student Directory & Records</span> <small>&rarr;</small>
             </div>
             <div className="module-link-row" onClick={() => onNavigate('transport')}>
-              <Clock3 size={16} /> <span>Transport & Live Bus GPS</span> <small>&rarr;</small>
+              <Clock3 size={16} /> <span>Transport preview</span> <small>&rarr;</small>
             </div>
             <div className="module-link-row" onClick={() => onNavigate('exams')}>
               <Award size={16} /> <span>Exams & Report Cards</span> <small>&rarr;</small>

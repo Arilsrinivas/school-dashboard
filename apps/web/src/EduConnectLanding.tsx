@@ -4,15 +4,15 @@ import {
   Users, DollarSign, Calendar, Bus, BookOpen, Layers, Menu, X,
   Phone, Mail, Building2, ChevronRight, Star, PlayCircle
 } from 'lucide-react';
-import './schoollog.css';
+import './educonnect.css';
 
-interface SchoollogLandingProps {
+interface EduConnectLandingProps {
   onOpenDemo: () => void;
   onGoToLogin: () => void;
   onExploreModule: (moduleKey: string) => void;
 }
 
-export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreModule }: SchoollogLandingProps) {
+export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreModule }: EduConnectLandingProps) {
   const [activeTab, setActiveTab] = useState<'admissions' | 'academics' | 'fees' | 'attendance' | 'transport'>('admissions');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -20,13 +20,13 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* 1. Top Announcement Header */}
       <div style={{ background: '#09131f', color: '#cbd5e1', fontSize: '12px', padding: '8px 24px', textAlign: 'center', fontWeight: 500 }}>
-        <span style={{ color: '#22c55e', fontWeight: 700, marginRight: '6px' }}>NEW:</span>
-        Schoollog AI Operating System 2026 is now live across 1,100+ schools in India.{' '}
+        <span style={{ color: '#22c55e', fontWeight: 700, marginRight: '6px' }}>PRODUCT PREVIEW:</span>
+        Sample interface only. SMS, biometric, GPS and delivery integrations are not connected.{' '}
         <button
           onClick={onOpenDemo}
           style={{ background: 'transparent', border: 'none', color: '#22c55e', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, padding: 0 }}
         >
-          Book an interactive demo →
+          Contact CalmStacks →
         </button>
       </div>
 
@@ -70,7 +70,7 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
             One platform to run your school’s <span className="gradient-text">Admissions, Academics, Fees &amp; Safety.</span>
           </h1>
           <p className="sl-hero-subtitle">
-            Say goodbye to fragmented spreadsheets and legacy desktop software. Schoollog brings principals, teachers, accountants, and parents onto one unified intelligent cloud.
+            Say goodbye to fragmented spreadsheets and legacy desktop software. EduConnect brings school administration, academics, and family workspaces together.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginBottom: '40px' }}>
@@ -95,10 +95,10 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
               03. Fee Reconciliation
             </button>
             <button className={`sl-tab-pill ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
-              04. Biometric Attendance
+              04. Attendance
             </button>
             <button className={`sl-tab-pill ${activeTab === 'transport' ? 'active' : ''}`} onClick={() => setActiveTab('transport')}>
-              05. Live Bus GPS
+              05. Transport Preview
             </button>
           </div>
 
@@ -112,7 +112,7 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
                   <div className="sl-traffic-dot" style={{ background: '#10b981' }} />
                 </div>
                 <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748b' }}>
-                  schoollog.operating.system // {activeTab.toUpperCase()}
+                  educonnect.school.workspace // {activeTab.toUpperCase()}
                 </span>
               </div>
               <button
@@ -207,7 +207,7 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
                     </div>
                     <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                       <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>AUTO REMINDERS</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>WhatsApp &amp; SMS Active</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>Preview data</div>
                     </div>
                   </div>
                 </div>
@@ -217,8 +217,8 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Student &amp; Staff Biometric Roll Call</h3>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Automated instant SMS alert to parents if student absent without prior leave</p>
+                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Attendance Preview</h3>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Sample interface. Biometric hardware and SMS delivery are not connected.</p>
                     </div>
                     <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
                       Today: 95.8% Present
@@ -245,7 +245,7 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Live School Bus GPS &amp; Approaching Alerts</h3>
+                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Transport Preview · Sample Data</h3>
                       <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Parents receive dynamic notification 5 minutes before bus arrives at their stop</p>
                     </div>
                     <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
@@ -324,7 +324,7 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
               <div className="sl-feature-icon"><Calendar size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Attendance &amp; Staff HR</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Biometric &amp; mobile attendance, automated absent SMS triggers, staff leave management, and payroll attendance records.
+                Attendance workflows; hardware, SMS, and payroll integrations require provider setup.
               </p>
               <button onClick={() => onExploreModule('attendance')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
                 Explore Attendance Suite <ChevronRight size={15} />
@@ -333,9 +333,9 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
 
             <div className="sl-feature-card">
               <div className="sl-feature-icon"><Bus size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Live Bus GPS Tracking</h3>
+              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Transport Preview Tracking</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Real-time route tracking, approaching-stop parent alerts, conductor RFID boarding, and emergency SOS broadcast.
+                Sample route interface only. GPS tracking, RFID boarding, and parent alerts are unavailable.
               </p>
               <button onClick={() => onExploreModule('transport')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
                 Explore Fleet Safety <ChevronRight size={15} />
@@ -356,25 +356,25 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
         </div>
       </section>
 
-      {/* 5. Institutional Social Proof & Stats */}
+      {/* Product principles */}
       <section style={{ background: '#0c1e33', color: '#ffffff', padding: '64px 0' }}>
         <div className="sl-container">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '32px', textAlign: 'center' }}>
             <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>1,100+</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Schools Powered Nationwide</div>
+              <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>New product</div>
+              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Independent school workspaces</div>
             </div>
             <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>850,000+</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Active Students &amp; Parents</div>
+              <div style={{ fontSize: '42px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>Tenant scoped</div>
+              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>School-scoped access</div>
             </div>
             <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>99.98%</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Platform Uptime Reliability</div>
+              <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>Designed for</div>
+              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Secure operations</div>
             </div>
             <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>100+ Cities</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Presence Across India</div>
+              <div style={{ fontSize: '42px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>School teams</div>
+              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>One connected platform</div>
             </div>
           </div>
         </div>
@@ -385,11 +385,11 @@ export default function SchoollogLanding({ onOpenDemo, onGoToLogin, onExploreMod
         <div className="sl-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <GraduationCap size={20} color="#22c55e" />
-            <span style={{ color: '#ffffff', fontWeight: 700 }}>Schoollog</span>
-            <span>— The AI-Native School Operating System</span>
+            <span style={{ color: '#ffffff', fontWeight: 700 }}>EduConnect</span>
+            <span>— School operations, connected</span>
           </div>
           <div>
-            © 2026 L.B. Microtechnologies Pvt. Ltd. All rights reserved.
+            Powered by CalmStacks
           </div>
         </div>
       </footer>
