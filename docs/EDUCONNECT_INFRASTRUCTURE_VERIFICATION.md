@@ -19,7 +19,7 @@
 | Firebase Cloud Storage bucket | **Not configured** | No bucket name is available in the current process; no Firebase CLI or authenticated provider access is available to inspect or create one. |
 | Firebase Storage Rules | **Implemented but not verified** | `storage.rules` is included by `firebase.json`. Firebase CLI/Rules Emulator are unavailable, so rules were neither compiled nor exercised. |
 | Initial CalmStacks Super Admin | **Not configured** | Bootstrap utility exists (`npm run db:bootstrap-admin`), but no verified fresh DB or one-time secret is available. It was not run. No public administrator registration was enabled. |
-| Fresh schema, least-privilege roles and RLS | **Implemented but not verified on PostgreSQL** | Migrations 001–013 and the guarded verifier exist. No database was available. PGlite runs are not accepted as actual PostgreSQL proof. |
+| Fresh schema, least-privilege roles and RLS | **Implemented but not verified on PostgreSQL** | One consolidated initial schema plus a project-reference/empty-schema guard exist. PGlite validates declarations only; managed PostgreSQL remains unverified. |
 
 ## Fresh PostgreSQL provisioning attempt (2026-11-21)
 
@@ -45,7 +45,7 @@ Before any connection, I inspected the configured URL without emitting its crede
 | `012_runtime_role_rls.sql` | Alters `educonnect_app`/`educonnect_platform` only if they already exist; it does **not create them**. Forces RLS on existing RLS tables, adds a platform-only policy, and fails if any `school_id` table lacks a tenant policy. Manual role/grant review is required for Supabase. | **Not run** |
 | `013_private_file_storage.sql` | Adds file metadata status/display fields and an index; no object bytes or external data are moved. | **Not run** |
 
-The ordered migration runner wraps each file in a transaction and records it in `schema_migrations`, but creates that tracking table before applying migrations. `infra/postgres-init/01-runtime-role.sh` is a local-container provisioning script targeting the database name `educonnect`; it should not be run against Supabase as-is. It creates roles and broad table/sequence grants. For Supabase, first verify current role names/attributes and required grants through an authorized administrative connection, then provision the two runtime logins with least privilege. Migration 012 will harden existing roles but cannot replace role creation. The separate security verifier intentionally creates test schools and rows; per instruction, it was not run.
+Fresh installation now applies one consolidated file, `apps/api/schema/educonnect.initial.sql`, rather than running migrations 001–013 individually. It requires `EDUCONNECT_DATABASE_PROJECT_REF`, verifies both configured URLs identify that project and the same database, requires `postgres`, and refuses a non-empty public schema. Remote migration TLS validates certificates. A PGlite test applies the schema and checks tenant RLS declarations; that is not live PostgreSQL evidence. `infra/postgres-init/01-runtime-role.sh` is a local-container provisioning script targeting database `educonnect`; it creates roles and broad grants and should not be run against Supabase as-is. Supabase runtime logins still require secure provisioning and live verification. Migration 012 hardens existing roles but does not create them. The separate security verifier intentionally creates test schools and rows; per instruction, it was not run.
 
 ### Verification status after inspection
 
@@ -58,14 +58,14 @@ The ordered migration runner wraps each file in a transaction and records it in 
 | Live PostgreSQL RLS/FORCE RLS inventory and two-tenant authorization | **Not verified** | No live connection. Local PGlite tests are not evidence for managed PostgreSQL. |
 | Initial Super Admin | **Not configured** | Bootstrap not run. No default credentials created. |
 
-To continue, configure the new project's connection string as `DATABASE_URL` in the ignored local secret file or a secret manager. Before running anything, independently confirm the URL host contains project ref `jnhcomdjezlvmxpjkoot`, database is `postgres`, and authenticated role is the intended migration owner. Then run the ordered migrations, inspect actual role flags/grants and RLS catalogs, and verify tenant isolation with a separately prepared non-destructive test plan. Do not run the destructive verifier against this application database.
+Configure `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `PLATFORM_DATABASE_URL`, and `EDUCONNECT_DATABASE_PROJECT_REF=jnhcomdjezlvmxpjkoot` only after secure URLs are available. The migration guard also requires the expected ref in each URL hostname or username, same database path, database name `postgres`, and empty public schema. Actual PostgreSQL role creation, role flags/grants and RLS catalog inspection remain outstanding. Do not run the destructive verifier against this application database.
 
 ## Local verification evidence
 
 | Command | Result | Scope/limitations |
 |---|---|---|
 | `npm run build` | **PASS** | API TypeScript build and Vite production build passed. Vite emitted non-fatal Zod annotation warnings. |
-| `npm test` | **PASS: 15/15** | Includes auth, tenant and storage authorization scenarios. Storage provider is mocked and DB fixtures use PGlite. |
+| `npm test` | **PASS: 16/16** | Includes consolidated schema/RLS declarations, auth, tenant and storage authorization scenarios. Storage provider is mocked and DB fixtures use PGlite. |
 | `npm run test:e2e` | **PASS: 1/1; 14 lifecycle phases** | PGlite lifecycle test; not managed PostgreSQL. |
 | `npm audit --omit=dev` | **PASS: 0 vulnerabilities** | Local dependency audit only. |
 | Firebase Admin / real ID token validation | **Not verified** | Test uses generated credentials and injected verifier. No live Firebase request. |

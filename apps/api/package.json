@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:bootstrap-admin": "tsx src/auth/bootstrap.ts",
-    "test": "tsx --test --test-concurrency=1 src/proxy.test.ts src/auth/security.test.ts src/auth/google-auth.integration.test.ts src/auth/firebase-auth.integration.test.ts src/db/tenant-isolation.test.ts src/homework/homework.integration.test.ts src/exams/exams.integration.test.ts src/timetable/timetable.integration.test.ts src/fees/fees.integration.test.ts src/announcements/announcements.integration.test.ts src/reports/reports.integration.test.ts",
+    "test": "tsx --test --test-concurrency=1 src/proxy.test.ts src/auth/security.test.ts src/auth/google-auth.integration.test.ts src/auth/firebase-auth.integration.test.ts src/db/initial-schema.test.ts src/db/tenant-isolation.test.ts src/homework/homework.integration.test.ts src/exams/exams.integration.test.ts src/timetable/timetable.integration.test.ts src/fees/fees.integration.test.ts src/announcements/announcements.integration.test.ts src/reports/reports.integration.test.ts",
     "test:postgres-security": "tsx src/db/production-postgres-verify.ts",
     "test:e2e": "tsx --test src/e2e/e2e-workflow.test.ts"
   },

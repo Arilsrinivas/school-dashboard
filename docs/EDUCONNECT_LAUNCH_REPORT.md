@@ -42,4 +42,6 @@ Set server-only `FIREBASE_PROJECT_ID=educonnect-44f2b`, `FIREBASE_SERVICE_ACCOUN
 - Bootstrap the first CalmStacks Super Admin securely, then verify Firebase Google and email/password sign-in, invitations, school creation and tenant isolation.
 - Verify mobile layouts and critical routes on the isolated deployment.
 
+Fresh database setup uses one consolidated initial schema (`apps/api/schema/educonnect.initial.sql`), not execution of migrations 001–013. `npm run db:migrate` requires `EDUCONNECT_DATABASE_PROJECT_REF`, validates that application and migration URLs identify the same project/database, requires database `postgres`, refuses a non-empty public schema, and validates remote TLS certificates. Runtime roles still need secure provisioning so migration 012 can harden them. The local `.env` continues to point to loopback, so initialization was not run.
+
 No push, merge, deployment, database modification, or old data copy was performed.

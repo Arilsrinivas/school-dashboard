@@ -77,14 +77,10 @@ async function main() {
     );
     assert.equal(existingRoles.rowCount, 2, 'both runtime login roles exist before migrations');
 
-    const migrationDir = new URL('../../migrations/', import.meta.url);
-    const migrations = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
-    for (const name of migrations) {
-      let sql = await readFile(new URL(name, migrationDir), 'utf8');
-      sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/, '');
-      await admin.query(sql);
-      console.info(`Applied ${name} to the isolated verification database`);
-    }
+    let initialSchema = await readFile(new URL('../../schema/educonnect.initial.sql', import.meta.url), 'utf8');
+    initialSchema = initialSchema.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/, '');
+    await admin.query(initialSchema);
+    console.info('Applied consolidated EduConnect initial schema to the isolated verification database');
 
     await admin.query('GRANT USAGE ON SCHEMA public TO educonnect_app,educonnect_platform');
     await admin.query('GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform');
