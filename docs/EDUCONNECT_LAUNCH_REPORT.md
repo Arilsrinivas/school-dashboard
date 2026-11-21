@@ -24,6 +24,8 @@
 
 Set server-only `FIREBASE_PROJECT_ID=educonnect-44f2b`, `FIREBASE_SERVICE_ACCOUNT_JSON`, and `FIREBASE_STORAGE_BUCKET` in the isolated EduConnect API deployment. Set the five `VITE_FIREBASE_*` web values for the same project. Configure the new PostgreSQL database URLs separately and verify their database identity before bootstrapping the initial CalmStacks Super Admin. Create a private Firebase bucket, prevent public IAM access, and deploy `storage.rules`. Exact steps are in `FIREBASE_STORAGE_SETUP.md`.
 
+Initial administrator provisioning is explicit: create/verify the intended administrator in Firebase, set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_FIREBASE_UID` in an ignored local environment or secret manager, then invoke `npm run db:bootstrap-admin` once with the EduConnect `PLATFORM_DATABASE_URL` and project reference configured. The script checks Firebase email verification, exact email match, target project identity, and an empty `platform_users` table; it inserts a random unusable legacy password hash and the Firebase identity in one transaction. API startup never runs the bootstrap. Remove the two bootstrap selectors after success. This procedure has not been executed because the database is not yet connected.
+
 ## Tests executed
 
 - `npm install --package-lock-only --ignore-scripts`: completed; dependency audit reported 0 vulnerabilities. npm warned that installed Firebase Realtime Database transitive packages declare Node >=24.12, while the local runtime is Node 22.17.1. This unrelated Firebase RTDB engine warning needs resolution or confirmation against the target Vercel runtime.
@@ -43,5 +45,7 @@ Set server-only `FIREBASE_PROJECT_ID=educonnect-44f2b`, `FIREBASE_SERVICE_ACCOUN
 - Verify mobile layouts and critical routes on the isolated deployment.
 
 Fresh database setup uses one consolidated initial schema (`apps/api/schema/educonnect.initial.sql`), not execution of migrations 001–013. `npm run db:migrate` requires `EDUCONNECT_DATABASE_PROJECT_REF`, validates that application and migration URLs identify the same project/database, requires database `postgres`, refuses a non-empty public schema, and validates remote TLS certificates. Runtime roles still need secure provisioning so migration 012 can harden them. The local `.env` continues to point to loopback, so initialization was not run.
+
+Current connection follow-up: `DATABASE_URL` points to the supplied Supabase project host/ref, but a read-only connection failed TLS with `SELF_SIGNED_CERT_IN_CHAIN`. Install the project's downloaded root CA at `.secrets/supabase-root.crt` (`DATABASE_SSL_CA_CERT_PATH`) and configure migration/platform URLs to project-specific endpoints before retrying. Certificate verification remains enabled.
 
 No push, merge, deployment, database modification, or old data copy was performed.

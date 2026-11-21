@@ -65,6 +65,7 @@ const schema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().default(defaultDb),
+  DATABASE_SSL_CA_CERT_PATH: z.string().optional(),
   MIGRATION_DATABASE_URL: z.string().default(defaultPlatformDb),
   PLATFORM_DATABASE_URL: z.string().default(defaultPlatformDb),
   ACCESS_TOKEN_SECRET: z.string().min(32).default('dev-access-token-secret-must-be-at-least-32-chars-long'),
@@ -72,7 +73,7 @@ const schema = z.object({
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
-  BOOTSTRAP_ADMIN_PASSWORD: z.string().min(12).optional(),
+  BOOTSTRAP_ADMIN_FIREBASE_UID: z.string().min(1).max(128).optional(),
   BOOTSTRAP_ADMIN_NAME: z.string().default('CalmStacks Platform Admin'),
   INVITATION_BASE_URL: z.string().default('http://localhost:5173/accept-invitation'),
   RECOVERY_BASE_URL: z.string().default('http://localhost:5173/recover-account'),
@@ -95,4 +96,4 @@ export const firebaseServiceAccount = env.AUTH_PROVIDER === 'firebase' && env.FI
   ? parseFirebaseServiceAccountJson(env.FIREBASE_SERVICE_ACCOUNT_JSON, env.FIREBASE_PROJECT_ID)
   : undefined;
 if (env.ACCESS_TOKEN_SECRET === env.REFRESH_TOKEN_SECRET) throw new Error('Access and refresh secrets must be different');
-for(const key of ['DATABASE_URL','PLATFORM_DATABASE_URL','MIGRATION_DATABASE_URL','ACCESS_TOKEN_SECRET','REFRESH_TOKEN_SECRET','BOOTSTRAP_ADMIN_PASSWORD'] as const){const value=env[key];if(value?.toLowerCase().includes('replace-with')||value?.toLowerCase().includes('replace-before'))throw new Error(`${key} still has the example placeholder; replace it before starting EduConnect`);}
+for(const key of ['DATABASE_URL','PLATFORM_DATABASE_URL','MIGRATION_DATABASE_URL','ACCESS_TOKEN_SECRET','REFRESH_TOKEN_SECRET'] as const){const value=env[key];if(value?.toLowerCase().includes('replace-with')||value?.toLowerCase().includes('replace-before'))throw new Error(`${key} still has the example placeholder; replace it before starting EduConnect`);}

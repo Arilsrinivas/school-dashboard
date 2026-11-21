@@ -25,7 +25,7 @@
 
 The supplied project reference is `jnhcomdjezlvmxpjkoot` and the operator reports PostgreSQL 17.12, database `postgres`, zero public application tables, and exclusive EduConnect intent. These provider facts are user-supplied; they were not independently confirmed through Supabase.
 
-Before any connection, I inspected the configured URL without emitting its credentials. The ignored local `.env` currently resolves to host `127.0.0.1` and database `postgres`; the expected project reference was absent. The current process has no `DATABASE_URL`. **The target could not be positively verified, so no database connection or SQL was attempted and no migration ran.** The local `.env` was not changed, and no connection string or credential was printed or committed. The prior Schoollog database was not contacted.
+The configured `DATABASE_URL` resolves to Supabase shared pooler host `aws-1-ap-southeast-1.pooler.supabase.com`, database `postgres`, with the supplied project ref present in the connection identity. The process environment itself has no DB variables; values are read only from ignored `.env`, never printed. A read-only TLS handshake/query attempt failed with `SELF_SIGNED_CERT_IN_CHAIN`; no SQL query ran and no migration was applied. `MIGRATION_DATABASE_URL` and `PLATFORM_DATABASE_URL` still resolve to `127.0.0.1` and therefore fail the project identity guard. `.secrets/supabase-root.crt` is not present. The old Schoollog database was not contacted.
 
 ### Migration review, execution order 001–013
 
@@ -58,7 +58,7 @@ Fresh installation now applies one consolidated file, `apps/api/schema/educonnec
 | Live PostgreSQL RLS/FORCE RLS inventory and two-tenant authorization | **Not verified** | No live connection. Local PGlite tests are not evidence for managed PostgreSQL. |
 | Initial Super Admin | **Not configured** | Bootstrap not run. No default credentials created. |
 
-Configure `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `PLATFORM_DATABASE_URL`, and `EDUCONNECT_DATABASE_PROJECT_REF=jnhcomdjezlvmxpjkoot` only after secure URLs are available. The migration guard also requires the expected ref in each URL hostname or username, same database path, database name `postgres`, and empty public schema. Actual PostgreSQL role creation, role flags/grants and RLS catalog inspection remain outstanding. Do not run the destructive verifier against this application database.
+The immediate blocker is the Supabase root CA certificate. Supabase's official connection guidance requires its downloaded project root certificate for full certificate verification; TLS verification must not be disabled. Download that certificate from the new project's Database Settings and place it at the ignored `.secrets/supabase-root.crt` path (or configure `DATABASE_SSL_CA_CERT_PATH`). Then configure `MIGRATION_DATABASE_URL` to the project's direct/session-mode connection endpoint suitable for migrations and `PLATFORM_DATABASE_URL` to the custom platform runtime login. Both URLs must identify project ref `jnhcomdjezlvmxpjkoot`; the current localhost URLs are rejected. Once CA trust works, verify target identity/emptiness and create the two least-privilege runtime roles before applying the guarded consolidated schema. Actual PostgreSQL role flags/grants and RLS catalog inspection remain outstanding. Do not run the destructive verifier against this application database.
 
 ## Local verification evidence
 

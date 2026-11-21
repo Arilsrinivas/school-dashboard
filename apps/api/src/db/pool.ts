@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { readFileSync } from 'node:fs';
 import { env } from '../config.js';
 
 function cleanConnectionString(url: string): string {
@@ -12,10 +13,12 @@ function cleanConnectionString(url: string): string {
 }
 
 function getSslConfig(url: string) {
-  if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
+  const local=url.includes('127.0.0.1')||url.includes('localhost');
+  if(local&&url.includes('sslmode=disable')){
     return undefined;
   }
-  return { rejectUnauthorized: true };
+  if(!local&&url.includes('sslmode=disable'))throw new Error('Remote PostgreSQL connections cannot disable TLS');
+  return { rejectUnauthorized: true,...(env.DATABASE_SSL_CA_CERT_PATH?{ca:readFileSync(env.DATABASE_SSL_CA_CERT_PATH,'utf8')}: {}) };
 }
 
 export const pool = new pg.Pool({

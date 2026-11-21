@@ -1,7 +1,9 @@
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { env } from '../config.js';
+import { assertEduConnectDatabaseTarget } from './target-identity.js';
 
 let migratedPromise: Promise<void> | null = null;
 
@@ -20,23 +22,20 @@ export async function runMigrations(): Promise<void> {
     }
 
     function getSsl(url: string) {
-      if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
+      const local=url.includes('127.0.0.1')||url.includes('localhost');
+      if(local&&url.includes('sslmode=disable')){
         return undefined;
       }
-      return { rejectUnauthorized: true };
+      if(!local&&url.includes('sslmode=disable'))throw new Error('Remote PostgreSQL migrations cannot disable TLS');
+      return { rejectUnauthorized: true,...(env.DATABASE_SSL_CA_CERT_PATH?{ca:readFileSync(env.DATABASE_SSL_CA_CERT_PATH,'utf8')}: {}) };
     }
 
     const connStr = env.MIGRATION_DATABASE_URL || env.PLATFORM_DATABASE_URL || env.DATABASE_URL;
-    const appUrl = new URL(env.DATABASE_URL);
-    const migrationUrl = new URL(connStr);
     const expectedProjectRef = process.env.EDUCONNECT_DATABASE_PROJECT_REF?.trim();
-    if (!expectedProjectRef || !/^[a-z0-9]{20}$/.test(expectedProjectRef)) {
+    if (!expectedProjectRef) {
       throw new Error('Set EDUCONNECT_DATABASE_PROJECT_REF to the verified EduConnect Supabase project reference before schema initialization');
     }
-    const identifiesProject = (url: URL) => url.hostname.includes(expectedProjectRef) || decodeURIComponent(url.username).includes(expectedProjectRef);
-    if (!identifiesProject(appUrl) || !identifiesProject(migrationUrl) || appUrl.pathname !== migrationUrl.pathname) {
-      throw new Error('Database identity guard failed: app and migration URLs must both identify the configured EduConnect project and database');
-    }
+    assertEduConnectDatabaseTarget(env.DATABASE_URL,connStr,expectedProjectRef);
     const migrationPool = new pg.Pool({
       connectionString: cleanConnectionString(connStr),
       max: 2,
