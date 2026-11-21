@@ -3,8 +3,18 @@ import { initializeApp, getApps } from '@firebase/app';
 import { browserLocalPersistence, createUserWithEmailAndPassword, getAuth, GoogleAuthProvider, onAuthStateChanged, sendEmailVerification, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword, signInWithPopup, signOut, type User } from '@firebase/auth';
 
 const config={apiKey:import.meta.env.VITE_FIREBASE_API_KEY,authDomain:import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,projectId:import.meta.env.VITE_FIREBASE_PROJECT_ID,appId:import.meta.env.VITE_FIREBASE_APP_ID,messagingSenderId:import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID};
-export const firebaseConfigured=Boolean(config.apiKey&&config.authDomain&&config.projectId&&config.appId);
-export const firebaseAuth=firebaseConfigured?getAuth(getApps()[0]??initializeApp(config)):null;
+const expectedProjectId='educonnect-44f2b';
+const expectedAuthDomain='educonnect-44f2b.firebaseapp.com';
+const firebaseConfigHasRequiredValues=Boolean(config.apiKey&&config.authDomain&&config.projectId&&config.appId);
+const firebaseConfigMatchesEduConnect=config.projectId===expectedProjectId&&config.authDomain===expectedAuthDomain;
+export const firebaseConfigured=firebaseConfigHasRequiredValues&&firebaseConfigMatchesEduConnect;
+export const firebaseConfigurationError=!firebaseConfigHasRequiredValues
+  ? 'Firebase Authentication is not configured. Set the Firebase Web App API key, auth domain, project ID, and app ID in apps/web/.env.'
+  : !firebaseConfigMatchesEduConnect
+    ? 'Firebase Authentication must use the EduConnect Firebase project educonnect-44f2b.'
+    : '';
+const existingEduConnectApp=getApps().find(app=>app.name==='educonnect-web-auth');
+export const firebaseAuth=firebaseConfigured?getAuth(existingEduConnectApp??initializeApp(config,'educonnect-web-auth')):null;
 if(firebaseAuth) void setPersistence(firebaseAuth,browserLocalPersistence);
 export type FirebasePrincipal=User;
 export async function firebaseIdToken():Promise<string|null>{return firebaseAuth?.currentUser?firebaseAuth.currentUser.getIdToken():null;}

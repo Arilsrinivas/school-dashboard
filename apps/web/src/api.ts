@@ -47,6 +47,7 @@ export async function request<T>(path:string,init:RequestInit={}):Promise<T>{
     }catch{}
     const err = new Error(message);
     (err as any).code = code;
+    (err as any).status = response.status;
     throw err;
   }
   if(response.status===204)return undefined as T;return response.json() as Promise<T>;
@@ -109,7 +110,9 @@ export async function loginWithGoogle(params: { idToken?: string; credential?: s
     firebaseMode=true;accessToken=null;
     let context:{user:User;schools:Array<{school_id:string}>};
     try{context=await request('/api/auth/firebase/context');}
-    catch{
+    catch(contextError){
+      const authError=contextError as Error & {status?:number};
+      if(authError.status!==403||!authError.message.includes('Firebase account is not linked'))throw contextError;
       if(!googleIdToken)throw new Error('This Firebase account has no EduConnect link. Access requires an approved invitation or an existing account.');
       firebaseMode=false;
       let legacy=await request<any>('/api/auth/google',{method:'POST',body:JSON.stringify({idToken:googleIdToken,schoolId:params.schoolId})});

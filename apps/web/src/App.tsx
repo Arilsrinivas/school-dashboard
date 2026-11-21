@@ -17,7 +17,7 @@ const SettingsWorkspace = lazy(() => import('./SettingsWorkspace'));
 const NotificationBell = lazy(() => import('./NotificationBell'));
 import EduConnectLanding from './EduConnectLanding';
 import { useFirebaseAuth } from './auth/firebase';
-import { firebaseConfigured } from './auth/firebase';
+import { firebaseConfigured, firebaseConfigurationError } from './auth/firebase';
 import StudentDocuments from './StudentDocuments';
 const AdmissionsWorkspace = lazy(() => import('./AdmissionsWorkspace'));
 const TransportWorkspace = lazy(() => import('./TransportWorkspace'));
@@ -360,31 +360,8 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
 
   async function handleGoogleClick() {
     setError('');
-
-    if(firebaseConfigured){await executeGoogleToken('firebase');return;}
-
-    // Google Identity Services (GSI)
-    const googleGSI = (window as any).google?.accounts?.id;
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (googleGSI && clientId) {
-      try {
-        googleGSI.initialize({
-          client_id: clientId,
-          callback: (resp: any) => {
-            if (resp?.credential) {
-              void executeGoogleToken(resp.credential);
-            }
-          },
-        });
-        googleGSI.prompt();
-        return;
-      } catch (e) {
-        console.warn('[Google GSI] prompt fallback:', e);
-      }
-    }
-
-    // When GSI is not loaded or configured, notify user
-    setError('Google Sign-In is initializing or requires VITE_GOOGLE_CLIENT_ID to be configured. Please sign in with email and password.');
+    if(!firebaseConfigured){setError(firebaseConfigurationError);return;}
+    await executeGoogleToken('firebase');
   }
 
   return (
