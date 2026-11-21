@@ -1,90 +1,93 @@
 # EduConnect Infrastructure Verification
 
-**Date:** 2026-11-21
-**Code revision:** `49585fe1f183e1216e6989934f382a8d5667aa90`
+**Verification date:** 2026-11-21
 **Branch:** `codex/firebase-production-release`
-**Decision:** Infrastructure is not provisioned or production-verified. No remote infrastructure, database, deployment or records were modified.
+**Implementation commit:** `d0112f797074257eb2b1cbd2a787c04e9ca20e13`
+**Database:** Supabase project `jnhcomdjezlvmxpjkoot`, PostgreSQL 17.12, database `postgres`
+**Overall status:** PostgreSQL schema and tenant controls are live and verified. First administrator provisioning, Firebase live checks, and separate Vercel project setup remain blocked on provider configuration.
 
-## Resource inventory
+## Results at a glance
 
-| Resource/check | Classification | Evidence |
+| Item | Classification | Evidence |
 |---|---|---|
-| EduConnect application code | **Verified** | Worktree is on the stated branch and commit; build and local suites passed below. |
-| Existing Schoollog repository/deployment association | **Verified** | `git remote -v` points to `https://github.com/Arilsrinivas/school-dashboard.git`; repository history identifies the existing `school-dashboard` project. No changes were made to it. |
-| Separate Vercel project | **Not configured** | `Test-Path .vercel/project.json` returned `False`; Vercel CLI is not installed and no Vercel-related environment variables are present in the current process. Project dashboard access cannot be verified from this workspace. |
-| New EduConnect PostgreSQL instance | **Blocked** | `.env` now contains a URL whose host/username identify `jnhcomdjezlvmxpjkoot`; read-only TLS handshake failed with `SELF_SIGNED_CERT_IN_CHAIN`. Migration and platform URLs still point to loopback. No SQL query or migration ran. |
-| Existing Schoollog database | **Untouched** | No database connection was attempted. No migrations or bootstrap commands were run. |
-| Firebase project selection | **Implemented but not verified** | Application defaults and setup docs name `educonnect-44f2b`; `firebase.json` points to `storage.rules`. Firebase CLI is not installed, and no Firebase credentials/config values are present in the current process. |
-| Firebase Admin SDK local wiring | **Implemented but not verified live** | Unit/integration tests initialize Admin with a generated ephemeral key and inject a test token verifier. They do not contact Firebase or verify a real project service account or ID token. |
-| Firebase Cloud Storage bucket | **Not configured** | No bucket name is available in the current process; no Firebase CLI or authenticated provider access is available to inspect or create one. |
-| Firebase Storage Rules | **Implemented but not verified** | `storage.rules` is included by `firebase.json`. Firebase CLI/Rules Emulator are unavailable, so rules were neither compiled nor exercised. |
-| Initial CalmStacks Super Admin | **Not configured** | Bootstrap utility exists (`npm run db:bootstrap-admin`), but no verified fresh DB or one-time secret is available. It was not run. No public administrator registration was enabled. |
-| Fresh schema, least-privilege roles and RLS | **Implemented but not verified on PostgreSQL** | One consolidated initial schema plus a project-reference/empty-schema guard exist. PGlite validates declarations only; managed PostgreSQL remains unverified. |
+| Root CA file and strict TLS | **Verified** | `.secrets/supabase-root.crt` exists, is readable, and was used with `rejectUnauthorized: true`; the certificate parses as a CA and is valid through 2031-04-26. |
+| EduConnect target database | **Verified** | The Supabase pooler username included the supplied project reference; live sessions returned database `postgres` and PostgreSQL `17.12`. The session pooler at port `5432` and transaction pooler at port `6543` both connected with certificate verification. |
+| Consolidated initial schema | **Verified** | `npm --prefix apps/api run db:migrate` applied `apps/api/schema/educonnect.initial.sql` successfully once to the empty public schema. The code does not replay migrations 001–013 individually. |
+| Runtime database roles | **Verified** | `educonnect_app` and `educonnect_platform` are login roles with `NOSUPERUSER`, `NOBYPASSRLS`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, and no inherited role memberships. |
+| RLS and tenant isolation | **Verified** | Catalog inspection found 68 public tables, all with RLS enabled and forced. All 57 tables with `school_id` have a tenant policy. Live two-tenant read/insert/update/delete and missing-context checks passed. |
+| Supabase REST role access | **Verified** | `anon`, `authenticated`, and `service_role` have no table/sequence privileges on application data and receive no such defaults for future objects. Runtime access is through the EduConnect API roles. |
+| API database connectivity | **Verified** | Local API `/health` returned `status=ok`, `database=ok`, and `platformDatabase=ok` using the configured application pools. |
+| Initial CalmStacks Super Admin | **Blocked** | Firebase Admin credentials, `AUTH_PROVIDER=firebase`, and a verified Firebase UID are not configured locally. The bootstrap was not run and no platform user exists. |
+| Firebase live identity/storage | **Not configured / not verified** | No Firebase Admin service-account JSON, project ID, or storage bucket configuration is present in the ignored local env files. No live Firebase request or bucket operation was performed. |
+| Isolated EduConnect Vercel project | **Not configured** | No separate Vercel project was verified or deployed from this workspace. |
+| Existing Schoollog database/deployment | **Untouched** | No Schoollog connection, migration, record copy, push, merge, or deployment occurred. |
 
-## Fresh PostgreSQL provisioning attempt (2026-11-21)
+## Database identity, TLS, and connection configuration
 
-The supplied project reference is `jnhcomdjezlvmxpjkoot` and the operator reports PostgreSQL 17.12, database `postgres`, zero public application tables, and exclusive EduConnect intent. These provider facts are user-supplied; they were not independently confirmed through Supabase.
+The correct certificate file is `C:\Users\User\Desktop\school web\.secrets\supabase-root.crt`. It is ignored by Git. The ignored root `.env` and `apps/api/.env` now point at the same EduConnect project and use:
 
-The configured `DATABASE_URL` resolves to Supabase shared pooler host `aws-1-ap-southeast-1.pooler.supabase.com`, database `postgres`, with the supplied project ref present in the connection identity. The process environment itself has no DB variables; values are read only from ignored `.env`, never printed. A read-only TLS handshake/query attempt failed with `SELF_SIGNED_CERT_IN_CHAIN`; no SQL query ran and no migration was applied. `MIGRATION_DATABASE_URL` and `PLATFORM_DATABASE_URL` still resolve to `127.0.0.1` and therefore fail the project identity guard. `.secrets/supabase-root.crt` is not present. The old Schoollog database was not contacted.
+- `DATABASE_URL`: `educonnect_app` through the transaction pooler (port `6543`)
+- `PLATFORM_DATABASE_URL`: `educonnect_platform` through the transaction pooler (port `6543`)
+- `MIGRATION_DATABASE_URL`: managed `postgres` migration identity through the session pooler (port `5432`)
+- `DATABASE_SSL_CA_CERT_PATH`: the local CA certificate path
+- `EDUCONNECT_DATABASE_PROJECT_REF`: `jnhcomdjezlvmxpjkoot`
 
-### Migration review, execution order 001–013
+No credentials are included here or in Git. All three connection identities were checked by role, database, port, and project-qualified pooler username. The managed `postgres` identity has elevated RLS bypass capability, so it is reserved for schema work and is not used as either runtime role. Runtime requests use the two separately verified, non-BYPASSRLS logins.
 
-| Migration | Review findings | Execution result |
+## Schema review and execution
+
+All source files `001_initial.sql` through `013_private_file_storage.sql` were reviewed in order. No `DROP TABLE`, `DROP SCHEMA`, `DROP DATABASE`, or persistent data deletion was found. The consolidated script includes a constraint removal after that constraint is created earlier in the same fresh-install script, and a policy replacement that follows creation of the original policy. Existing operation migrations contain data backfills, but the target had no application records. The schema inserts only platform role/permission definitions and the built-in Trial subscription plan; it creates no school, student, staff, parent, or administrator records.
+
+The first guarded migration attempt rolled back without creating schema: Supabase's managed `postgres` role cannot alter role attributes. The initial schema and migration 012 were corrected to validate pre-provisioned least-privilege roles instead of trying to modify them. The migration was then run successfully once. The consolidated SQL now also grants runtime DML under RLS, revokes direct table/sequence access from Supabase's `anon`, `authenticated`, and `service_role` roles, removes their default privileges for future tables, and removes public-schema `CREATE` access. Those grants and revocations were applied to the live EduConnect database and checked afterward.
+
+## Live PostgreSQL security evidence
+
+Command executed:
+
+```text
+npm --prefix apps/api run db:verify-live-tenant
+```
+
+Actual result:
+
+```text
+PASS: PostgreSQL 17.12; 57 tenant tables; two-tenant read/insert/update/delete denial; missing-context denial; same-connection tenant context reset; temporary records rolled back.
+```
+
+The verifier checks the project-qualified migration URL, strict CA-based TLS, both runtime role attributes and inherited memberships, every public table's RLS state, and every `school_id` table's tenant policy. It inserts two temporary schools and students inside a transaction, switches into the actual runtime role identities for the policy checks, and always rolls the transaction back. It also calls the application's `tenantTransactionUsing` helper through the real `educonnect_app` pool, verifies that the same backend connection is reused, and confirms the prior tenant context is absent before the next request context is set.
+
+After the check, database queries confirmed `schools=0`, `students=0`, `users=0`, and `platform_users=0`; the temporary grant of runtime-role membership to the managed migration identity was also rolled back. Catalog checks confirmed the three Supabase API roles have zero table privileges and no future table/sequence ACLs. This provides live PostgreSQL evidence; PGlite results are reported separately below.
+
+## Build and regression results
+
+| Command | Result | Scope |
 |---|---|---|
-| `001_initial.sql` | Creates `pgcrypto`, sequence, base platform/school/identity/academic/finance tables, indexes, enums, and initial RLS policies. Requires permission to create the extension if unavailable. | **Not run** |
-| `002_school_authority.sql` | Adds school role/permission authority, constraints, triggers/functions and role backfill `UPDATE`s. Assumes base schema and appropriate schema privileges. | **Not run** |
-| `003_attendance_operations.sql` | Adds attendance/history structures, policies, indexes and mutation-protection trigger/function. | **Not run** |
-| `004_homework_operations.sql` | Adds assignments/submissions/attachments/audit structures, policies and append-only protection. | **Not run** |
-| `005_examinations_operations.sql` | Adds exam/results/grading structures and performs a data backfill `UPDATE` from examination rows. | **Not run** |
-| `006_timetable_operations.sql` | Adds periods/audit structures and backfills class/academic-year fields with `UPDATE`s. | **Not run** |
-| `007_fees_operations.sql` | Adds fees, receipt sequences and immutable payment/reversal triggers; includes tenant policies. | **Not run** |
-| `008_announcements_operations.sql` | Adds notification/audit fields, uses `DROP POLICY IF EXISTS` then recreates the tenant policy, and adds foreign keys/indexes. Review this policy replacement against the fresh target before execution. | **Not run** |
-| `009_external_identities.sql` | Adds OAuth/Firebase UID mapping, nullable legacy password support and RLS. No memberships are created. | **Not run** |
-| `010_tenant_security_hardening.sql` | Applies FORCE RLS to a fixed table list, adds a permission, indexes and child-consent table/policy. Requires each listed relation to exist. | **Not run** |
-| `011_operations_rls_hardening.sql` | Enables and forces RLS on later-added tenant tables; assumes preceding migrations created all listed tables. | **Not run** |
-| `012_runtime_role_rls.sql` | Alters `educonnect_app`/`educonnect_platform` only if they already exist; it does **not create them**. Forces RLS on existing RLS tables, adds a platform-only policy, and fails if any `school_id` table lacks a tenant policy. Manual role/grant review is required for Supabase. | **Not run** |
-| `013_private_file_storage.sql` | Adds file metadata status/display fields and an index; no object bytes or external data are moved. | **Not run** |
+| `npm --prefix apps/api run db:migrate` | **Passed** | Applied only the consolidated fresh-install schema on the verified new database. |
+| `npm --prefix apps/api run db:verify-live-tenant` | **Passed** | Real PostgreSQL 17.12, TLS, roles, grants, RLS, cross-school denial, missing tenant context, rollback, and pool reuse. |
+| `npm --prefix apps/api test` | **Passed: 17/17** | Application integration suites run on PGlite; useful regression evidence, not live database evidence. |
+| `npm --prefix apps/api run build` | **Passed** | TypeScript production build. |
+| `npm --prefix apps/api run test:e2e` | **Passed: 1/1, 14 lifecycle phases** | PGlite E2E workflow; not a live Firebase or production deployment test. |
+| Local API `GET /health` | **Passed** | Both real application database pools returned healthy. |
 
-Fresh installation now applies one consolidated file, `apps/api/schema/educonnect.initial.sql`, rather than running migrations 001–013 individually. It requires `EDUCONNECT_DATABASE_PROJECT_REF`, verifies both configured URLs identify that project and the same database, requires `postgres`, and refuses a non-empty public schema. Remote migration TLS validates certificates. A PGlite test applies the schema and checks tenant RLS declarations; that is not live PostgreSQL evidence. `infra/postgres-init/01-runtime-role.sh` is a local-container provisioning script targeting database `educonnect`; it creates roles and broad grants and should not be run against Supabase as-is. Supabase runtime logins still require secure provisioning and live verification. Migration 012 hardens existing roles but does not create them. The separate security verifier intentionally creates test schools and rows; per instruction, it was not run.
+## Bootstrap and exact remaining operator actions
 
-### Verification status after inspection
+The one-time bootstrap code is present and does not use a fixed or public administrator password. It requires a Firebase user with a verified email that matches `BOOTSTRAP_ADMIN_EMAIL`. Its bootstrap record receives a random unusable legacy password hash and a Firebase UID link.
 
-| Item | Classification | Result |
-|---|---|---|
-| Supplied target string safely checked before connection | **Verified** | URL host is the Supabase shared pooler; the project reference is present in the URL identity. TLS verification failed before SQL. |
-| New Supabase project connection configured in `DATABASE_URL` | **Implemented but not connected** | Ignored `.env` has the new project URL. A trusted root CA is not configured, and migration/platform URLs are still local. No credentials were printed. |
-| Migrations applied to new project | **Blocked** | Stopped before connection because target identity did not match. No migrations applied. |
-| PostgreSQL 17.12 runtime role attributes | **Not verified** | No live SQL connection; cannot report `rolsuper`, `rolbypassrls`, memberships or grants. |
-| Live PostgreSQL RLS/FORCE RLS inventory and two-tenant authorization | **Not verified** | No live connection. Local PGlite tests are not evidence for managed PostgreSQL. |
-| Initial Super Admin | **Not configured** | Bootstrap not run. No default credentials created. |
+To complete the first administrator setup:
 
-The immediate blocker is the Supabase root CA certificate. Supabase documents that the downloaded project root certificate must be configured for full server-certificate and hostname verification; TLS verification must not be disabled ([Supabase database connection TLS guidance](https://supabase.com/docs/guides/database/connecting-to-postgres)). Download that certificate from the new project's Database Settings and place it at the ignored `.secrets/supabase-root.crt` path (or configure `DATABASE_SSL_CA_CERT_PATH`). Then configure `MIGRATION_DATABASE_URL` to the project's direct/session-mode connection endpoint suitable for migrations and `PLATFORM_DATABASE_URL` to the custom platform runtime login. Both URLs must identify project ref `jnhcomdjezlvmxpjkoot`; the current localhost URLs are rejected. Once CA trust works, verify target identity/emptiness and create the two least-privilege runtime roles before applying the guarded consolidated schema. Actual PostgreSQL role flags/grants and RLS catalog inspection remain outstanding. Do not run the destructive verifier against this application database.
+1. In Firebase project `educonnect-44f2b`, create or identify a dedicated email-verified administrator account and obtain its Firebase UID.
+2. Add `AUTH_PROVIDER=firebase`, `FIREBASE_PROJECT_ID=educonnect-44f2b`, and the server-only `FIREBASE_SERVICE_ACCOUNT_JSON` to the local ignored environment and later the isolated Vercel project's server environment. Do not use a `VITE_` variable for Admin credentials.
+3. Set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_FIREBASE_UID`, and `BOOTSTRAP_ADMIN_NAME` to that same verified Firebase identity.
+4. Run `npm --prefix apps/api run db:bootstrap-admin` once, then remove bootstrap-only configuration as appropriate. Confirm one row exists in `platform_users` and its external Firebase identity is linked.
 
-## Local verification evidence
+No `platform_users` row has been created yet. Do not treat Firebase authentication or Super Admin access as operational until this action is completed and the bootstrap output is verified.
 
-| Command | Result | Scope/limitations |
-|---|---|---|
-| `npm run build` | **PASS** | API TypeScript build and Vite production build passed. Vite emitted non-fatal Zod annotation warnings. |
-| `npm test` | **PASS: 16/16** | Includes consolidated schema/RLS declarations, auth, tenant and storage authorization scenarios. Storage provider is mocked and DB fixtures use PGlite. |
-| `npm run test:e2e` | **PASS: 1/1; 14 lifecycle phases** | PGlite lifecycle test; not managed PostgreSQL. |
-| `npm audit --omit=dev` | **PASS: 0 vulnerabilities** | Local dependency audit only. |
-| Firebase Admin / real ID token validation | **Not verified** | Test uses generated credentials and injected verifier. No live Firebase request. |
-| Firebase Storage bucket upload/download and denial | **Not verified** | Mocked adapter tests only; no bucket exists/was checked from this environment. |
-| Firebase Rules Emulator | **Not run** | Firebase CLI is not installed. |
-| Real PostgreSQL security verifier | **Not run** | No verified isolated DB. Docker reports `failed to connect to the docker API`; no local PG tools. It would be unsafe to use an unknown `.env` database. |
+## Remaining launch blockers
 
-## Configuration requirements for later provisioning
+- Firebase Admin environment and a verified bootstrap Firebase UID are not configured, so the first platform administrator is not provisioned.
+- Firebase Cloud Storage bucket configuration, Storage Rules Emulator tests, and real bucket upload/download denial checks remain unverified.
+- An isolated EduConnect Vercel project and its environment scopes have not been configured or verified.
+- The live database smoke test verified schema-level school creation and tenant isolation inside a rolled-back transaction; it did not create a persistent school or exercise an authenticated production school-creation API request.
+- No backup/restore test, production deployment, live Firebase authentication test, or live object-storage test was performed in this provisioning run.
 
-1. Provision a **new** database/instance explicitly named for EduConnect. Before connecting, record and independently verify provider/project, host, database name, region and environment. Confirm empty schema. Keep old Schoollog connection values out of the new deployment.
-2. Create migration-owner, `educonnect_app`, and `educonnect_platform` roles. Runtime roles must be non-superuser, `NOBYPASSRLS`, and must not inherit privileged roles. Supply connection values through a secret manager only after the target identity is verified.
-3. Apply migrations 001–013 to the fresh database using the migration role. Run `npm run test:postgres-security` only against a new empty isolated database named `educonnect_security_verify_YYYYMMDD`, with the explicit guard required by the verifier. Never point it at the old database.
-4. Bootstrap the first CalmStacks Super Admin once using a generated, unique secret from a secure secret manager. Remove the bootstrap password from the deployment environment afterward. No credential belongs in Git or this report.
-5. In Firebase `educonnect-44f2b`, provision a private Cloud Storage bucket; set public access prevention/IAM; configure `FIREBASE_PROJECT_ID`, server-only `FIREBASE_SERVICE_ACCOUNT_JSON`, and `FIREBASE_STORAGE_BUCKET`. Set only the public `VITE_FIREBASE_*` web configuration for the same project. Do not place Admin values in `VITE_*` variables.
-6. Install Firebase CLI in a controlled operator environment, select the verified project explicitly, run Rules Emulator tests, then deploy reviewed `storage.rules`. Test API upload/download/denial using disposable identities and the new DB.
-7. Create/authorize a separate Vercel EduConnect project connected to the intended repository/branch. Verify its deployment metadata and every database/Firebase environment scope before any deployment. Keep the old Vercel project and database available and unchanged.
-
-## Required human/operator access
-
-Infrastructure work is blocked until an authorized operator provides or configures: Firebase console/CLI access for project `educonnect-44f2b` (and confirms billing/storage location), a new PostgreSQL provider project/database with billing approval as required, and a separate Vercel project/team association. These are external account and billing actions. Do not send credentials in chat; configure them directly in provider secret managers.
-
-No push, merge, deploy, database connection, database migration, administrator bootstrap, Firebase bucket mutation, or old data copy occurred during this verification.
+No push, merge, or deployment was performed. The existing Schoollog database and deployment were not contacted or modified.
