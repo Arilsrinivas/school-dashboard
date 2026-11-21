@@ -1,0 +1,30 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function memberOf(schoolId) {
+      return signedIn()
+        && request.auth.token.school_id == schoolId
+        && request.auth.token.school_active == true;
+    }
+    function roleIs(roles) {
+      return signedIn() && request.auth.token.school_role in roles;
+    }
+    function allowedDocument() {
+      return request.resource == null
+        || (request.resource.size <= 10 * 1024 * 1024
+          && request.resource.contentType.matches('image/(jpeg|png|webp)|application/pdf|text/plain'));
+    }
+    match /schools/{schoolId}/{allPaths=**} {
+      // API uses Firebase Admin after checking the live PostgreSQL membership and
+      // permission. Rules require server-issued school claims for any direct client access.
+      allow read: if memberOf(schoolId) && roleIs(['super_admin','school_admin','teacher','parent','student']);
+      allow create, update: if memberOf(schoolId)
+        && roleIs(['super_admin','school_admin','teacher'])
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)|application/pdf|text/plain');
+      allow delete: if memberOf(schoolId) && roleIs(['super_admin','school_admin']);
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

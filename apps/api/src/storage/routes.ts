@@ -5,7 +5,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import { asyncRoute, fail } from '../http.js';
 import { authenticate, requireSchoolPermission } from '../middleware/auth.js';
 import { tenantTransaction } from '../db/pool.js';
-import { privateBucket, storageClient } from './supabase.js';
+import { privateBucket, storageClient } from './firebase.js';
 
 export const storageRouter=Router();
 const MAX_FILE_BYTES=10*1024*1024;

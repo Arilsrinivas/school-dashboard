@@ -14,7 +14,7 @@
 
 - Production requires explicit PostgreSQL URLs, distinct 32-character token secrets, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `AUTH_PROVIDER=firebase`, and HTTPS `WEB_ORIGIN`. Set Vite Firebase web values at build time; keep Admin credentials server-side. Follow [Firebase setup](FIREBASE_AUTH_SETUP.md).
 - Express trusts one forwarded proxy hop only when the Vercel runtime sets `VERCEL=1`; local environments trust no forwarded headers. Do not set blanket `trust proxy=true`. Recheck `/api/auth/refresh` logs and rate-limit behavior after each deployment.
-- Supabase document storage stays disabled until a private bucket is provisioned and checked. Set server-only `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, bucket name and `SUPABASE_STORAGE_ENABLED=true`. Follow [Storage setup](SUPABASE_STORAGE_SETUP.md). Never set the bucket public or expose the service key.
+- Firebase Cloud Storage uses a private bucket configured by server-only `FIREBASE_STORAGE_BUCKET` and Firebase Admin credentials. Follow [Firebase Storage setup](FIREBASE_STORAGE_SETUP.md). The API checks PostgreSQL school membership and file permission before every operation; do not expose Admin credentials or make the bucket public.
 - SMTP and the durable queue worker are not yet production-ready. Do not report a notification as delivered unless the provider confirms acceptance, and do not assume an outbox row was delivered.
 - Push delivery is unavailable until a provider is configured and verified; core operations must continue without it.
 - Configure structured error monitoring, alert routing, log retention, database/queue health, owner/on-call routing and secrets rotation before launch.

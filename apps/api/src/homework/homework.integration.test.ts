@@ -21,7 +21,7 @@ test('homework creation, assigned/student/parent scopes, submissions, grading an
   process.env.DATABASE_URL=`postgresql://educonnect_app@127.0.0.1:${port}/postgres?sslmode=disable`;
   process.env.PLATFORM_DATABASE_URL=`postgresql://educonnect_platform@127.0.0.1:${port}/postgres?sslmode=disable`;
   process.env.MIGRATION_DATABASE_URL=process.env.PLATFORM_DATABASE_URL;
-  const [{pool,platformPool,tenantTransaction},{signAccess},{homeworkRouter},{storageRouter},{setStorageClientForTest}]=await Promise.all([import('../db/pool.js'),import('../auth/tokens.js'),import('./routes.js'),import('../storage/routes.js'),import('../storage/supabase.js')]);
+  const [{pool,platformPool,tenantTransaction},{signAccess},{homeworkRouter},{storageRouter},{setStorageClientForTest}]=await Promise.all([import('../db/pool.js'),import('../auth/tokens.js'),import('./routes.js'),import('../storage/routes.js'),import('../storage/firebase.js')]);
   pool.on('acquire',client=>{void client.query('SET ROLE educonnect_app');});platformPool.on('acquire',client=>{void client.query('SET ROLE educonnect_platform');});
   const app=express();app.use(express.json());app.use('/api/school/homework',homeworkRouter);app.use('/api/school',storageRouter);
   const testPdf=Buffer.alloc(120);Buffer.from('%PDF-1.4\n').copy(testPdf);

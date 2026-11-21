@@ -83,8 +83,7 @@ const schema = z.object({
   GOOGLE_CALLBACK_URL: z.string().optional(),
   FIREBASE_PROJECT_ID: z.string().default('educonnect-44f2b'), FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   VITE_FIREBASE_API_KEY: z.string().optional(), VITE_FIREBASE_AUTH_DOMAIN: z.string().optional(), VITE_FIREBASE_APP_ID: z.string().optional(), VITE_FIREBASE_MESSAGING_SENDER_ID: z.string().optional(),
-  SUPABASE_URL: z.string().url().optional(), SUPABASE_ANON_KEY: z.string().optional(), SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  SUPABASE_STORAGE_BUCKET: z.string().default('school-private-documents'), SUPABASE_STORAGE_ENABLED: z.enum(['true','false']).default('false'),
+  FIREBASE_STORAGE_BUCKET: z.string().optional(),
   AUTH_PROVIDER: z.enum(['firebase','legacy']).default(process.env.NODE_ENV === 'production' ? 'firebase' : 'legacy')
 });
 
@@ -96,5 +95,4 @@ export const firebaseServiceAccount = env.AUTH_PROVIDER === 'firebase' && env.FI
   ? parseFirebaseServiceAccountJson(env.FIREBASE_SERVICE_ACCOUNT_JSON, env.FIREBASE_PROJECT_ID)
   : undefined;
 if (env.ACCESS_TOKEN_SECRET === env.REFRESH_TOKEN_SECRET) throw new Error('Access and refresh secrets must be different');
-if(env.SUPABASE_STORAGE_ENABLED==='true'&&(!env.SUPABASE_URL||!env.SUPABASE_SERVICE_ROLE_KEY))throw new Error('SUPABASE_STORAGE_ENABLED requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
 for(const key of ['DATABASE_URL','PLATFORM_DATABASE_URL','MIGRATION_DATABASE_URL','ACCESS_TOKEN_SECRET','REFRESH_TOKEN_SECRET','BOOTSTRAP_ADMIN_PASSWORD'] as const){const value=env[key];if(value?.toLowerCase().includes('replace-with')||value?.toLowerCase().includes('replace-before'))throw new Error(`${key} still has the example placeholder; replace it before starting EduConnect`);}

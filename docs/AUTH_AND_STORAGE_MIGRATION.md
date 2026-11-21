@@ -42,15 +42,15 @@ A verified Firebase token that has no mapping is denied application access. A va
 5. Preserve legacy auth routes and password hashes during a monitored migration window. Rollback means setting `AUTH_PROVIDER=legacy` in a controlled release and rebuilding/redeploying the matching frontend configuration; do not delete Firebase mappings or existing external identities during rollback.
 6. Only plan legacy credential retirement after every account cohort has migrated, password reset/invitation flows have been verified, a restore point exists, and a separate approved migration removes legacy credentials.
 
-Storage rollback: set `SUPABASE_STORAGE_ENABLED=false` to stop new uploads; keep the private bucket and PostgreSQL object metadata intact. Do not make the bucket public to restore access. Existing files remain in the private bucket and can be re-enabled after credentials/policies are corrected.
+Storage rollback: disable document routes through deployment configuration and keep the private Firebase bucket and PostgreSQL object metadata intact. Do not make the bucket public. Existing files remain private and can be restored after IAM or configuration is corrected.
 
 ## Tests and verification state
 
 - `firebase-auth.integration.test.ts`: PGlite plus an injectable test-only token verifier checks valid mapped identities, invalid tokens, denied unmapped contexts, active multi-school selection, foreign school selection, inactive account rejection, and the explicit two-session link route.
 - `homework.integration.test.ts`: PGlite plus an injected storage client checks student document authorization, a linked parent's access, unrelated parent denial, unassigned teacher denial, cross-school read/insert/delete denial, content signature/size/MIME handling, and private signed-link issuance.
-- Tests do not call Firebase Auth or Supabase Storage live. They do not prove Firebase's public-key verification, service role permissions, live bucket privacy, Supabase object behavior, or actual production PostgreSQL RLS/connection pool behavior.
+- Tests do not call Firebase Auth or Firebase Cloud Storage live. They do not prove Firebase token verification, live bucket privacy, Storage Rules behavior, provider object operations, or actual production PostgreSQL RLS/connection pool behavior.
 - Managed PostgreSQL tenant-isolation verification remains required per `FINAL_PRODUCTION_VERIFICATION.md`.
 
 ## Human actions still required
 
-Configure Firebase providers/domains and Vercel environment values; configure Supabase project URL/service key and private bucket; run live auth and storage tests; confirm PostgreSQL migration 013 on a non-production copy; then run managed PostgreSQL RLS verification. Retain old passwords and records until human reviewers accept migration evidence and rollback readiness.
+Configure Firebase providers/domains and Vercel environment values; configure the private Firebase Storage bucket and server-only Admin credentials; run live auth and storage tests; confirm PostgreSQL migration 013 on the isolated EduConnect database; then run managed PostgreSQL RLS verification. Do not import old school records.

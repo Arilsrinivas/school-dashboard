@@ -10,7 +10,7 @@
 - `npm run test:e2e` passed: the 14-phase school lifecycle and cross-school isolation workflow on PGlite.
 - Firebase token verification and explicit account linking are implemented; PGlite integration tests cover active/inactive account mapping, school membership selection, invalid tokens and tenant mismatch. Live Firebase verification is not complete.
 - Express trusts exactly one proxy hop only in Vercel (`VERCEL=1`); local mode trusts none. A simulated ingress test verifies arbitrary caller-supplied XFF is discarded before rate limiting. Production behavior remains pending a candidate deployment and log review.
-- Supabase private document routes, school/relationship authorization, MIME/signature/size validation, audit events and 120-second signed downloads are implemented. PGlite tests use a mocked Storage provider; no live private bucket verification has occurred.
+- Firebase Cloud Storage routes use school/relationship authorization, MIME/signature/size validation, audit events and 120-second signed downloads. PGlite tests use a mocked adapter; Firebase Rules and live bucket verification have not occurred.
 - CSV, PDF and XLSX exports for students, fees, attendance and published examinations use school-scoped queries. XLSX uses a minimal OpenXML ZIP writer. Report integration tests validate student content in the generated workbook and PDF/CSV response types using PGlite.
 - `npm audit --omit=dev` reports 0 vulnerabilities.
 - The migration set includes 011 RLS hardening, 012 runtime-role constraints, and 013 document upload lifecycle metadata. PGlite checks exercise policy behavior and pooled transaction context.
@@ -19,7 +19,7 @@
 ## External service and operations status
 
 - Firebase: integration implemented; production credentials, authorized origins/providers and live verification remain to be configured.
-- Supabase Storage: integration implemented; private bucket, production credentials, provider-side access checks and live upload/download tests remain to be configured.
+- Firebase Cloud Storage: integration implemented locally; private bucket, production credentials, provider-side access checks and live upload/download tests remain to be configured.
 - SMTP: not complete. Nodemailer is present but durable delivery confirmation, retries/failure administration and provider-tested password recovery/invitation workflows are not verified.
 - Background worker: not complete. Outbox production exists for notification workflows; durable execution, idempotency, retry/dead-letter, duplicate suppression and monitoring remain launch blockers.
 - Push notifications: unavailable until a provider and credentials are selected and delivery is implemented. Core workflows do not depend on push.

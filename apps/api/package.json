@@ -13,7 +13,6 @@
     "test:e2e": "tsx --test src/e2e/e2e-workflow.test.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.119.2",
     "argon2": "^0.41.1",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
