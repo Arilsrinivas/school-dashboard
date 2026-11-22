@@ -12,6 +12,8 @@ This is a single-origin deployment: browser API calls use relative `/api` paths,
 
 The local CLI check returned `Logged out`, and this checkout has no `.vercel/project.json`. Therefore no project ID, team scope, domain, Production variable, or old-project association was changed or assumed.
 
+For the dashboard procedure to separate EduConnect pull request checks from the existing Schoollog Git integration, see [VERCEL_GIT_PROJECT_SEPARATION.md](VERCEL_GIT_PROJECT_SEPARATION.md). Those dashboard steps have not been performed.
+
 After signing into the intended Vercel team:
 
 1. Create a new project named `educonnect` with `vercel project add` or the Vercel dashboard. Do not select, rename, relink, or import settings from the Schoollog project.
