@@ -13,6 +13,7 @@ export function storageClient():any {
     from:(bucket:string)=>({
       upload:async(path:string,bytes:Buffer,options:{contentType:string;upsert:boolean})=>client.storage.from(bucket).upload(path,bytes,{contentType:options.contentType,upsert:options.upsert,cacheControl:'0'}),
       remove:async(paths:string[])=>client.storage.from(bucket).remove(paths),
+      download:async(path:string)=>client.storage.from(bucket).download(path),
       createSignedUrl:async(path:string,seconds:number,options:any)=>client.storage.from(bucket).createSignedUrl(path,seconds,{download:options?.download??true})
     })
   }};

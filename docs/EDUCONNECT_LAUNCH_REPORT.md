@@ -19,10 +19,13 @@
 - `$env:AUTH_PROVIDER='legacy'; npm run test:e2e --workspace apps/api`: passed, including all 14 lifecycle phases and cross-tenant isolation.
 - `git diff --check`: passed.
 - Database guard and TLS check confirmed the migration target is the EduConnect project. The final schema has no Firebase-only purpose/resource columns, and runtime roles remain non-superuser and `NOBYPASSRLS`.
-- The Supabase service-role key is not configured in `apps/api/.env`; private bucket provisioning and actual Supabase Storage upload/download/delete tests could not be run. No live provider success is claimed.
+- `npm run storage:provision:supabase --workspace apps/api`: passed; all four private buckets were created for the EduConnect project.
+- `$env:SUPABASE_STORAGE_LIVE_TEST='1'; npm run test:storage:live --workspace apps/api`: passed against the real provider for private bucket checks, upload, signed download, unsigned denial and deletion in all four buckets.
+- `$env:EDUCONNECT_STORAGE_API_LIVE_TEST='1'; $env:EDUCONNECT_DATABASE_PROJECT_REF='jnhcomdjezlvmxpjkoot'; $env:AUTH_PROVIDER='legacy'; npm run test:storage:api:live --workspace apps/api`: passed against actual PostgreSQL runtime roles and Supabase Storage. The test verified file metadata, authorized upload/download/delete, unauthenticated denial, and School A/B denial, then removed only its disposable test rows and objects.
+- The local live API verification used a signed legacy test token for the request identity; Firebase Authentication remains the configured identity provider, and the test was not a Firebase sign-in test.
 
 ## Configuration and launch blockers
 
-Follow [Supabase Storage setup](SUPABASE_STORAGE_SETUP.md). An authorized project owner must add `SUPABASE_SERVICE_ROLE_KEY` to the ignored API environment and production server environment, then run the private bucket provisioning command. Afterward run the opt-in live storage test and the API tenant-isolation suite. Do not deploy the application until live provider checks pass.
+Follow [Supabase Storage setup](SUPABASE_STORAGE_SETUP.md) for server-side configuration and repeatable live checks. The local provider is configured and verified. The remaining infrastructure blocker is a separate EduConnect Vercel project and its server-only environment configuration; this change was not deployed.
 
 The first school and CalmStacks Super Admin remain in the existing PostgreSQL database. This storage change does not create, modify, or delete school/student records and does not touch the Schoollog database or deployment.

@@ -1,10 +1,10 @@
 # EduConnect Infrastructure Verification
 
-**Verification date:** 2026-11-21
+**Verification date:** 2026-11-22
 **Branch:** `codex/firebase-production-release`
-**Implementation commit:** `d0112f797074257eb2b1cbd2a787c04e9ca20e13`
+**Storage implementation commit:** `983dabedb23f75a8d56e4baf0969b12470709527`
 **Database:** Supabase project `jnhcomdjezlvmxpjkoot`, PostgreSQL 17.12, database `postgres`
-**Overall status:** PostgreSQL schema and tenant controls are live and verified. First administrator provisioning, Firebase live checks, and separate Vercel project setup remain blocked on provider configuration.
+**Overall status:** PostgreSQL tenant controls, Firebase authentication/admin provisioning (from prior live verification), and local Supabase Storage are verified. A separate EduConnect Vercel project and deployment remain unverified; no deployment was performed.
 
 ## Results at a glance
 
@@ -17,8 +17,11 @@
 | RLS and tenant isolation | **Verified** | Catalog inspection found 68 public tables, all with RLS enabled and forced. All 57 tables with `school_id` have a tenant policy. Live two-tenant read/insert/update/delete and missing-context checks passed. |
 | Supabase REST role access | **Verified** | `anon`, `authenticated`, and `service_role` have no table/sequence privileges on application data and receive no such defaults for future objects. Runtime access is through the EduConnect API roles. |
 | API database connectivity | **Verified** | Local API `/health` returned `status=ok`, `database=ok`, and `platformDatabase=ok` using the configured application pools. |
-| Initial CalmStacks Super Admin | **Blocked** | Firebase Admin credentials, `AUTH_PROVIDER=firebase`, and a verified Firebase UID are not configured locally. The bootstrap was not run and no platform user exists. |
-| Firebase live identity/storage | **Not configured / not verified** | No Firebase Admin service-account JSON, project ID, or storage bucket configuration is present in the ignored local env files. No live Firebase request or bucket operation was performed. |
+| Initial CalmStacks Super Admin | **Verified (prior live check)** | The first platform administrator was provisioned through the one-time Firebase-linked bootstrap and its platform access was verified. No school membership was added for the platform account. |
+| Firebase live identity | **Verified (prior live check)** | Google sign-in and Firebase Admin ID-token verification for project `educonnect-44f2b` were completed previously. This storage verification used local legacy-signed test tokens for the API tenant checks; it was not another Firebase sign-in test. |
+| Supabase Storage buckets | **Verified** | Created `student-documents`, `profile-images`, `assignments`, and `school-documents`; live bucket metadata confirmed all are private, have the 10 MiB cap, and match the documented MIME allowlists. |
+| Supabase Storage policies | **Verified** | Live PostgreSQL `pg_policies` inspection found no `storage.objects` policies granting access to `PUBLIC`, `anon`, or `authenticated`. Unsigned direct object requests were denied for each bucket. |
+| Supabase Storage backend authorization and file operations | **Verified** | Live API test used actual PostgreSQL runtime roles and the actual Supabase provider: authorized upload, tenant-derived metadata, signed download, deletion, unauthenticated denial, and School A/B upload/read/delete denial passed. Disposable test rows and objects were cleaned up. |
 | Isolated EduConnect Vercel project | **Not configured** | No separate Vercel project was verified or deployed from this workspace. |
 | Existing Schoollog database/deployment | **Untouched** | No Schoollog connection, migration, record copy, push, merge, or deployment occurred. |
 
@@ -38,7 +41,11 @@ No credentials are included here or in Git. All three connection identities were
 
 All source files `001_initial.sql` through `013_private_file_storage.sql` were reviewed in order. No `DROP TABLE`, `DROP SCHEMA`, `DROP DATABASE`, or persistent data deletion was found. The consolidated script includes a constraint removal after that constraint is created earlier in the same fresh-install script, and a policy replacement that follows creation of the original policy. Existing operation migrations contain data backfills, but the target had no application records. The schema inserts only platform role/permission definitions and the built-in Trial subscription plan; it creates no school, student, staff, parent, or administrator records.
 
-The first guarded migration attempt rolled back without creating schema: Supabase's managed `postgres` role cannot alter role attributes. The initial schema and migration 012 were corrected to validate pre-provisioned least-privilege roles instead of trying to modify them. The migration was then run successfully once. The consolidated SQL now also grants runtime DML under RLS, revokes direct table/sequence access from Supabase's `anon`, `authenticated`, and `service_role` roles, removes their default privileges for future tables, and removes public-schema `CREATE` access. Those grants and revocations were applied to the live EduConnect database and checked afterward.
+The first guarded migration attempt rolled back without creating schema: Supabase's managed `postgres` role cannot alter role attributes. The initial schema and migration 012 were corrected to validate pre-provisioned least-privilege roles instead of trying to modify them. The migration was then run successfully once. The consolidated SQL now also grants runtime DML under RLS, revokes direct table/sequence access from Supabase's `anon`, `authenticated`, and `service_role` roles, removes their default privileges for future tables, and removes public-schema `CREATE` access. Those grants and revocations were applied to the live EduConnect database and checked afterward. The Firebase-specific `uploaded_files` metadata columns briefly added during the earlier storage implementation were removed by migration 015 after confirming that table contained zero application rows; the original file metadata schema is retained.
+
+## Live Supabase Storage evidence
+
+The following commands were run locally against the configured EduConnect Supabase project. The provisioning command created all four private buckets. `npm run test:storage:live --workspace apps/api` passed real upload, 120-second signed download, unsigned denial, and deletion checks for each bucket. The live API test (`npm run test:storage:api:live --workspace apps/api`, with `EDUCONNECT_DATABASE_PROJECT_REF=jnhcomdjezlvmxpjkoot`, `EDUCONNECT_STORAGE_API_LIVE_TEST=1`, and `AUTH_PROVIDER=legacy`) checked both actual database runtime roles, private bucket configuration, MIME and size policies, and the absence of client-role `storage.objects` policies. It then exercised the backend authorization path against actual PostgreSQL and Supabase: unauthenticated access and a School B request for School A's student/file were denied, the forged client `schoolId` did not affect School A's database object path, file metadata was correct, authorized upload/download/delete succeeded, and test tenants/users/files were removed. No pre-existing school, student, or user rows were updated or deleted. This local test does not verify a deployed Vercel environment.
 
 ## Live PostgreSQL security evidence
 
@@ -67,6 +74,9 @@ After the check, database queries confirmed `schools=0`, `students=0`, `users=0`
 | `npm --prefix apps/api test` | **Passed: 17/17** | Application integration suites run on PGlite; useful regression evidence, not live database evidence. |
 | `npm --prefix apps/api run build` | **Passed** | TypeScript production build. |
 | `npm --prefix apps/api run test:e2e` | **Passed: 1/1, 14 lifecycle phases** | PGlite E2E workflow; not a live Firebase or production deployment test. |
+| `npm --prefix apps/api run storage:provision:supabase` | **Passed** | Created all four private EduConnect buckets with the configured 10 MiB size cap and MIME restrictions. |
+| `SUPABASE_STORAGE_LIVE_TEST=1 npm --prefix apps/api run test:storage:live` | **Passed** | Actual Supabase provider upload, signed download, unsigned access denial, and deletion across all four buckets. |
+| `EDUCONNECT_STORAGE_API_LIVE_TEST=1 npm --prefix apps/api run test:storage:api:live` | **Passed** | Actual Supabase PostgreSQL and Storage API authorization, metadata, file lifecycle, and cross-school denial; disposable test rows/objects cleaned up. |
 | Local API `GET /health` | **Passed** | Both real application database pools returned healthy. |
 
 ## Bootstrap and exact remaining operator actions
@@ -84,10 +94,7 @@ No `platform_users` row has been created yet. Do not treat Firebase authenticati
 
 ## Remaining launch blockers
 
-- Firebase Admin environment and a verified bootstrap Firebase UID are not configured, so the first platform administrator is not provisioned.
-- Supabase Storage service-key configuration, private bucket provisioning, and real upload/download/delete/provider-denial checks remain unverified. Firebase Authentication remains the identity provider; Firebase Storage is not used.
 - An isolated EduConnect Vercel project and its environment scopes have not been configured or verified.
-- The live database smoke test verified schema-level school creation and tenant isolation inside a rolled-back transaction; it did not create a persistent school or exercise an authenticated production school-creation API request.
-- No backup/restore test, production deployment, live Firebase authentication test, or live object-storage test was performed in this provisioning run.
+- No backup/restore test or deployment verification was performed during this storage provisioning run.
 
 No push, merge, or deployment was performed. The existing Schoollog database and deployment were not contacted or modified.

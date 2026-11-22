@@ -21,7 +21,7 @@ Retrieve the service-role/secret key in Supabase Dashboard → Project Settings 
 
 ## Create and configure buckets
 
-Once the service-role key is present in `apps/api/.env`, run:
+With the server-only key in ignored `apps/api/.env`, run:
 
 ```powershell
 npm run storage:provision:supabase --workspace apps/api
@@ -58,11 +58,26 @@ $env:AUTH_PROVIDER = 'legacy'
 npm test --workspace apps/api
 ```
 
-Those tests exercise the real API and PostgreSQL-compatible PGlite tenant fixture with an injected storage adapter; they are not live Supabase evidence. For live provider checks, after configuring the service-role key and provisioning buckets:
+Those tests exercise the API and PostgreSQL-compatible PGlite tenant fixture with an injected storage adapter; they are not live Supabase evidence. For real bucket operations after provisioning:
 
 ```powershell
 $env:SUPABASE_STORAGE_LIVE_TEST = '1'
 npm run test:storage:live --workspace apps/api
 ```
 
-The live check uploads, downloads through a 120-second signed URL, verifies unsigned object requests are denied, and deletes randomized temporary objects in each bucket. API integration tests cover school A/B access, unrelated parents, unauthorized uploads, file-type/size validation, signed URL authorization, and deletion. No actual Supabase Storage key or live bucket was available during this local implementation, so live object-provider tests remain blocked until that key is configured.
+The provider-only live check uploads, downloads through a 120-second signed URL, verifies unsigned object requests are denied, and deletes randomized temporary objects in each bucket. The API integration suite also covers unrelated parents, invalid file types, and oversized uploads using its local PostgreSQL-compatible test fixture.
+
+For an end-to-end verification through the real local API, PostgreSQL runtime roles and Supabase Storage provider, run:
+
+```powershell
+$env:EDUCONNECT_STORAGE_API_LIVE_TEST = '1'
+$env:EDUCONNECT_DATABASE_PROJECT_REF = 'jnhcomdjezlvmxpjkoot'
+$env:AUTH_PROVIDER = 'legacy'
+npm run test:storage:api:live --workspace apps/api
+```
+
+This guarded check first confirms both PostgreSQL URLs identify the EduConnect database and connects as `educonnect_app`/`educonnect_platform`, neither superuser nor `BYPASSRLS`. It verifies `storage.objects` has no policies for `PUBLIC`, `anon`, or `authenticated`, then checks each private bucket's MIME allowlist and 10 MiB cap. It creates two uniquely named test schools and admin users, signs short-lived local legacy test tokens, and exercises the backend's actual membership/tenant authorization path against real PostgreSQL and Supabase. It confirms a foreign-school upload/read/delete is denied, metadata uses the authenticated tenant despite a forged `schoolId`, and authorized upload/download/delete reaches the real provider. The script removes the test objects and only the tenant/user rows it created. This storage test uses local test tokens; it does not constitute a live Firebase sign-in test.
+
+## Latest local provider verification
+
+For the run on 2026-11-22, provisioning created all four private buckets. The real provider test passed upload, signed download, unsigned denial, and deletion in every bucket. The real API test passed database identity/RLS-policy checks, backend authorization, PostgreSQL file metadata, an actual API upload and signed download, School A/B denial, and deletion. It also confirmed the disposable tenant/user/file fixtures were cleaned up. No signed URLs, credentials, or school/student records were written to logs. These checks were run locally and do not verify any Vercel environment or deployment.
