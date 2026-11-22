@@ -50,5 +50,13 @@ export const MIGRATION_SCRIPTS: Array<{ name: string; sql: string }> = [
   {
     "name": "013_private_file_storage.sql",
     "sql": "ALTER TABLE uploaded_files\n  ADD COLUMN IF NOT EXISTS display_name text,\n  ADD COLUMN IF NOT EXISTS upload_status text NOT NULL DEFAULT 'ready';\nALTER TABLE uploaded_files\n  ADD CONSTRAINT uploaded_files_upload_status_check\n  CHECK (upload_status IN ('pending_upload','ready','failed'));\nCREATE INDEX IF NOT EXISTS uploaded_files_pending_idx ON uploaded_files(created_at) WHERE upload_status='pending_upload';\n"
+  },
+  {
+    "name": "014_firebase_storage_scopes.sql",
+    "sql": "ALTER TABLE uploaded_files\n  ADD COLUMN purpose text NOT NULL DEFAULT 'student_document',\n  ADD COLUMN resource_id uuid;\n\nALTER TABLE uploaded_files\n  ADD CONSTRAINT uploaded_files_purpose_check\n  CHECK (purpose IN ('student_document','student_certificate','student_profile_photo','assignment_attachment','school_document'));\n\nCREATE INDEX uploaded_files_school_purpose_idx\n  ON uploaded_files(school_id,purpose,created_at DESC)\n  WHERE upload_status='ready';\n"
+  },
+  {
+    "name": "015_revert_firebase_storage_scope.sql",
+    "sql": "ALTER TABLE uploaded_files DROP CONSTRAINT IF EXISTS uploaded_files_purpose_check;\nDROP INDEX IF EXISTS uploaded_files_school_purpose_idx;\nALTER TABLE uploaded_files DROP COLUMN IF EXISTS resource_id, DROP COLUMN IF EXISTS purpose;\n"
   }
 ];

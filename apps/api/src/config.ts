@@ -52,6 +52,11 @@ export function validateProductionEnvironment(values: NodeJS.ProcessEnv): void {
   if (!refresh || refresh.length < 32) throw new Error('REFRESH_TOKEN_SECRET must be explicitly configured with at least 32 characters in production');
   if (access === refresh) throw new Error('Access and refresh secrets must be different');
   if (!values.FIREBASE_SERVICE_ACCOUNT_JSON?.trim()) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON must be configured in production for Firebase Authentication');
+  if (!values.SUPABASE_URL?.trim()) throw new Error('SUPABASE_URL must be configured in production for private document storage');
+  if (!values.SUPABASE_SERVICE_ROLE_KEY?.trim()) throw new Error('SUPABASE_SERVICE_ROLE_KEY must be configured in production for private document storage');
+  let storageUrl: URL;
+  try { storageUrl = new URL(values.SUPABASE_URL); } catch { throw new Error('SUPABASE_URL must point to the dedicated EduConnect project'); }
+  if (storageUrl.protocol !== 'https:' || storageUrl.hostname !== 'jnhcomdjezlvmxpjkoot.supabase.co') throw new Error('SUPABASE_URL must point to the dedicated EduConnect project');
   parseFirebaseServiceAccountJson(values.FIREBASE_SERVICE_ACCOUNT_JSON, values.FIREBASE_PROJECT_ID || 'educonnect-44f2b');
 }
 
@@ -84,7 +89,12 @@ const schema = z.object({
   GOOGLE_CALLBACK_URL: z.string().optional(),
   FIREBASE_PROJECT_ID: z.string().default('educonnect-44f2b'), FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   VITE_FIREBASE_API_KEY: z.string().optional(), VITE_FIREBASE_AUTH_DOMAIN: z.string().optional(), VITE_FIREBASE_APP_ID: z.string().optional(), VITE_FIREBASE_MESSAGING_SENDER_ID: z.string().optional(),
-  FIREBASE_STORAGE_BUCKET: z.string().optional(),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  SUPABASE_STUDENT_DOCUMENTS_BUCKET: z.string().default('student-documents'),
+  SUPABASE_PROFILE_IMAGES_BUCKET: z.string().default('profile-images'),
+  SUPABASE_ASSIGNMENTS_BUCKET: z.string().default('assignments'),
+  SUPABASE_SCHOOL_DOCUMENTS_BUCKET: z.string().default('school-documents'),
   AUTH_PROVIDER: z.enum(['firebase','legacy']).default(process.env.NODE_ENV === 'production' ? 'firebase' : 'legacy')
 });
 

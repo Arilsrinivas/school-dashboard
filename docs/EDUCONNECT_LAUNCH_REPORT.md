@@ -1,51 +1,28 @@
 # EduConnect Launch Report
 
-**Status:** Not launch-ready. Firebase Storage code and rules are prepared locally; real Firebase, PostgreSQL and isolated deployment verification remain outstanding.
+**Storage architecture update:** Firebase Authentication remains the user identity provider. Private file objects use Supabase Storage in the dedicated EduConnect Supabase project `jnhcomdjezlvmxpjkoot`. PostgreSQL remains authoritative for school membership, roles, permissions, student relationships, and existing uploaded-file metadata.
 
-## Architecture changes
+## Implementation
 
-- Firebase project `educonnect-44f2b` is the identity and object-storage provider.
-- PostgreSQL remains the source of truth for schools, users, memberships, roles, permissions, status and file metadata.
-- File operations pass through authenticated API routes. The API checks active tenant membership, existing permissions, student/parent/teacher relationships, file type and size before using Firebase Admin Storage. No client-provided school ID grants access.
-- Firebase Storage Rules deny unmatched paths and limit direct access by school path, trusted claims, roles, content types and 10 MiB size. Admin SDK operations bypass these rules by design and must retain backend PostgreSQL checks.
-- No files or school data were migrated from the old product.
+- Added server-only Supabase client integration using `@supabase/supabase-js`; the service-role key is never part of the web bundle.
+- Added scoped upload, signed-download, failure cleanup, and delete routes for student documents, certificates, student profile images, assignment attachments, and school documents.
+- Added bucket provisioning for `student-documents`, `profile-images`, `assignments`, and `school-documents`; each is private with a 10 MiB size limit and MIME allowlist.
+- The API resolves Firebase UID and school membership from the existing identity/database middleware. It ignores client school IDs and validates student/parent/teacher relationships before file operations.
+- Authorized downloads use 120-second Supabase signed URLs. Uploads use MIME sniffing, path validation, upload-status metadata and audit events.
+- Existing PostgreSQL schema and application rows are retained. `uploaded_files.object_key` stores the bucket and object path; no new schema field is needed. This task's temporary Firebase-only metadata columns were removed after confirming `uploaded_files` contained zero records.
+- Firebase Storage rules/config were removed; Firebase Authentication configuration remains unchanged.
 
-## Changed files
+## Local verification
 
-`apps/api/src/storage/supabase.ts` was replaced by `apps/api/src/storage/firebase.ts`; `apps/api/src/storage/routes.ts`, `apps/api/src/config.ts`, `apps/api/src/homework/homework.integration.test.ts`, `apps/api/src/db/migrationsData.ts`, `apps/api/package.json`, `package-lock.json`, `.env.example`, `firebase.json`, and `storage.rules` were updated. Supabase Storage setup documentation was removed and replaced with `docs/FIREBASE_STORAGE_SETUP.md`; launch/runbook and migration documentation was updated. PostgreSQL migration 013 was renamed to `013_private_file_storage.sql`; it stores metadata only, not object bytes.
+- `npm run build`: passed for API TypeScript and the production web bundle.
+- `$env:AUTH_PROVIDER='legacy'; npm test --workspace apps/api`: passed, 17/17 tests. This includes PostgreSQL-compatible file authorization tests using an injected provider adapter and Firebase authentication unit/integration tests; it is not evidence of live Supabase object operations.
+- `$env:AUTH_PROVIDER='legacy'; npm run test:e2e --workspace apps/api`: passed, including all 14 lifecycle phases and cross-tenant isolation.
+- `git diff --check`: passed.
+- Database guard and TLS check confirmed the migration target is the EduConnect project. The final schema has no Firebase-only purpose/resource columns, and runtime roles remain non-superuser and `NOBYPASSRLS`.
+- The Supabase service-role key is not configured in `apps/api/.env`; private bucket provisioning and actual Supabase Storage upload/download/delete tests could not be run. No live provider success is claimed.
 
-## Dependencies
+## Configuration and launch blockers
 
-- Removed `@supabase/supabase-js` from the API workspace.
-- Firebase Admin SDK remains the server-side provider; Firebase web Auth remains the browser identity provider.
-- No other object-storage provider was added.
+Follow [Supabase Storage setup](SUPABASE_STORAGE_SETUP.md). An authorized project owner must add `SUPABASE_SERVICE_ROLE_KEY` to the ignored API environment and production server environment, then run the private bucket provisioning command. Afterward run the opt-in live storage test and the API tenant-isolation suite. Do not deploy the application until live provider checks pass.
 
-## Configuration required
-
-Set server-only `FIREBASE_PROJECT_ID=educonnect-44f2b`, `FIREBASE_SERVICE_ACCOUNT_JSON`, and `FIREBASE_STORAGE_BUCKET` in the isolated EduConnect API deployment. Set the five `VITE_FIREBASE_*` web values for the same project. Configure the new PostgreSQL database URLs separately and verify their database identity before bootstrapping the initial CalmStacks Super Admin. Create a private Firebase bucket, prevent public IAM access, and deploy `storage.rules`. Exact steps are in `FIREBASE_STORAGE_SETUP.md`.
-
-Initial administrator provisioning is explicit: create/verify the intended administrator in Firebase, set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_FIREBASE_UID` in an ignored local environment or secret manager, then invoke `npm run db:bootstrap-admin` once with the EduConnect `PLATFORM_DATABASE_URL` and project reference configured. The script checks Firebase email verification, exact email match, target project identity, and an empty `platform_users` table; it inserts a random unusable legacy password hash and the Firebase identity in one transaction. API startup never runs the bootstrap. Remove the two bootstrap selectors after success. This procedure has not been executed because the database is not yet connected.
-
-## Tests executed
-
-- `npm install --package-lock-only --ignore-scripts`: completed; dependency audit reported 0 vulnerabilities. npm warned that installed Firebase Realtime Database transitive packages declare Node >=24.12, while the local runtime is Node 22.17.1. This unrelated Firebase RTDB engine warning needs resolution or confirmation against the target Vercel runtime.
-- `npm run build`: passed for API and web.
-- `npm test`: 15/15 API suites passed. The storage integration uses a mocked provider adapter with PGlite metadata/authorization checks, including authorized upload, unauthorized roles, cross-school access, unrelated parent denial, invalid type, size limit and missing auth.
-- `npm run test:e2e`: 1/1 test, all 14 lifecycle phases passed using PGlite.
-- Tests did **not** call Firebase Storage. Firebase Storage Rules have not been compiled or run in the Firebase Emulator; no live Firebase Storage requests, real PostgreSQL RLS verification, fresh database installation, or isolated Vercel deployment has been performed. Do not infer provider success from mock adapter tests.
-
-## Remaining launch blockers
-
-- Provision and verify a new empty PostgreSQL database with least-privilege runtime roles; run migrations and the guarded real-PostgreSQL RLS checks there only.
-- Create and verify the private Firebase Storage bucket and run Firebase Rules Emulator plus provider-backed API tests.
-- Verify Firebase rules project/bucket selection and confirm bucket IAM denies public access.
-- Confirm backend service-account and bucket environment configuration without exposing credentials.
-- Verify a separate Vercel project/deployment points exclusively at the new database; do not reuse or overwrite the Schoollog deployment.
-- Bootstrap the first CalmStacks Super Admin securely, then verify Firebase Google and email/password sign-in, invitations, school creation and tenant isolation.
-- Verify mobile layouts and critical routes on the isolated deployment.
-
-Fresh database setup uses one consolidated initial schema (`apps/api/schema/educonnect.initial.sql`), not execution of migrations 001–013. `npm run db:migrate` requires `EDUCONNECT_DATABASE_PROJECT_REF`, validates that application and migration URLs identify the same project/database, requires database `postgres`, refuses a non-empty public schema, and validates remote TLS certificates. Runtime roles still need secure provisioning so migration 012 can harden them. The local `.env` continues to point to loopback, so initialization was not run.
-
-Current connection follow-up: `DATABASE_URL` points to the supplied Supabase project host/ref, but a read-only connection failed TLS with `SELF_SIGNED_CERT_IN_CHAIN`. Install the project's downloaded root CA at `.secrets/supabase-root.crt` (`DATABASE_SSL_CA_CERT_PATH`) and configure migration/platform URLs to project-specific endpoints before retrying. Certificate verification remains enabled.
-
-No push, merge, deployment, database modification, or old data copy was performed.
+The first school and CalmStacks Super Admin remain in the existing PostgreSQL database. This storage change does not create, modify, or delete school/student records and does not touch the Schoollog database or deployment.

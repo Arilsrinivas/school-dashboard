@@ -51,12 +51,16 @@ test('production config refuses implicit database and signing secrets',()=>{
     ACCESS_TOKEN_SECRET:'a'.repeat(40),
     REFRESH_TOKEN_SECRET:'b'.repeat(40)
   }),/FIREBASE_SERVICE_ACCOUNT_JSON must be configured/);
-  assert.doesNotThrow(()=>validateProductionEnvironment({
+  const validProductionEnvironment={
     NODE_ENV:'production',
     DATABASE_URL:'postgresql://app:secret@db.example.test/app',
     ACCESS_TOKEN_SECRET:'a'.repeat(40),
     REFRESH_TOKEN_SECRET:'b'.repeat(40),
     FIREBASE_PROJECT_ID:'educonnect-44f2b',
+    SUPABASE_URL:'https://jnhcomdjezlvmxpjkoot.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY:'server-only-test-key',
     FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({type:'service_account',project_id:'educonnect-44f2b',client_email:'firebase-admin@educonnect-44f2b.iam.gserviceaccount.com',private_key:generateKeyPairSync('rsa',{modulusLength:2048,privateKeyEncoding:{type:'pkcs8',format:'pem'},publicKeyEncoding:{type:'spki',format:'pem'}}).privateKey})
-  }));
+  };
+  assert.doesNotThrow(()=>validateProductionEnvironment(validProductionEnvironment));
+  assert.throws(()=>validateProductionEnvironment({...validProductionEnvironment,SUPABASE_URL:'https://jnhcomdjezlvmxpjkoot.supabase.co.attacker.invalid'}),/dedicated EduConnect project/);
 });

@@ -85,7 +85,7 @@ No `platform_users` row has been created yet. Do not treat Firebase authenticati
 ## Remaining launch blockers
 
 - Firebase Admin environment and a verified bootstrap Firebase UID are not configured, so the first platform administrator is not provisioned.
-- Firebase Cloud Storage bucket configuration, Storage Rules Emulator tests, and real bucket upload/download denial checks remain unverified.
+- Supabase Storage service-key configuration, private bucket provisioning, and real upload/download/delete/provider-denial checks remain unverified. Firebase Authentication remains the identity provider; Firebase Storage is not used.
 - An isolated EduConnect Vercel project and its environment scopes have not been configured or verified.
 - The live database smoke test verified schema-level school creation and tenant isolation inside a rolled-back transaction; it did not create a persistent school or exercise an authenticated production school-creation API request.
 - No backup/restore test, production deployment, live Firebase authentication test, or live object-storage test was performed in this provisioning run.
