@@ -1,11 +1,7 @@
-import React, { useState } from 'react';
-import {
-  ArrowRight, CheckCircle2, ShieldCheck, Sparkles,
-  Users, DollarSign, Calendar, Bus, BookOpen, Layers, Menu, X,
-  Phone, Mail, Building2, ChevronRight, Star, PlayCircle
-} from 'lucide-react';
-import './educonnect.css';
+import { useState } from 'react';
+import { ArrowRight, BookOpen, Building2, Bus, CalendarCheck, Check, ChevronRight, DollarSign, FileText, GraduationCap, Menu, Users, X } from 'lucide-react';
 import EduConnectBrand from './EduConnectBrand';
+import './educonnect.css';
 
 interface EduConnectLandingProps {
   onOpenDemo: () => void;
@@ -13,379 +9,124 @@ interface EduConnectLandingProps {
   onExploreModule: (moduleKey: string) => void;
 }
 
+const previewModules = [
+  { id: 'admissions', label: 'Admissions', icon: Users, title: 'Move each application forward.', detail: 'Keep enquiries, applications, review steps, and student records in one school workspace.' },
+  { id: 'academics', label: 'Academics', icon: BookOpen, title: 'Give academic work a clear home.', detail: 'Bring classes, homework, examinations, results, and timetables into the school day.' },
+  { id: 'attendance', label: 'Attendance', icon: CalendarCheck, title: 'See the daily register clearly.', detail: 'Record attendance by class and follow each student’s attendance history.' },
+  { id: 'fees', label: 'Fee accounts', icon: DollarSign, title: 'Keep fee records in view.', detail: 'Manage fee structures, student balances, offline payments, and receipts.' },
+  { id: 'transport', label: 'Transport', icon: Bus, title: 'Organize routes and records.', detail: 'Keep route information together. Live GPS, RFID, and message delivery are not connected.' },
+] as const;
+
 export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreModule }: EduConnectLandingProps) {
-  const [activeTab, setActiveTab] = useState<'admissions' | 'academics' | 'fees' | 'attendance' | 'transport'>('admissions');
+  const [activeTab, setActiveTab] = useState<(typeof previewModules)[number]['id']>('admissions');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const activeModule = previewModules.find(module => module.id === activeTab) || previewModules[0];
+  const ActiveIcon = activeModule.icon;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* 1. Top Announcement Header */}
-      <div style={{ background: '#09131f', color: '#cbd5e1', fontSize: '12px', padding: '8px 24px', textAlign: 'center', fontWeight: 500 }}>
-        <span style={{ color: '#22c55e', fontWeight: 700, marginRight: '6px' }}>PRODUCT PREVIEW:</span>
-        Sample interface only. SMS, biometric, GPS and delivery integrations are not connected.{' '}
-        <button
-          onClick={onOpenDemo}
-          style={{ background: 'transparent', border: 'none', color: '#22c55e', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, padding: 0 }}
-        >
-          Contact CalmStacks →
-        </button>
+    <div className="public-site">
+      <div className="preview-notice">
+        <span className="preview-notice-dot" aria-hidden="true" />
+        Product preview. Illustrative interface only; SMS, GPS, biometric hardware, and email delivery are not connected.
       </div>
 
-      {/* 2. Main Navigation Bar */}
-      <header className="edu-header">
-        <div className="edu-container edu-header-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-            <a href="/" className="edu-brand-link" aria-label="EduConnect home">
-              <EduConnectBrand compact className="landing-brand" />
-            </a>
-            <nav className="edu-nav-links" style={{ display: mobileMenuOpen ? 'none' : undefined }}>
-              <span className="edu-nav-item" onClick={() => onExploreModule('admissions')}>Admissions CRM</span>
-              <span className="edu-nav-item" onClick={() => onExploreModule('academics')}>Exams &amp; Homework</span>
-              <span className="edu-nav-item" onClick={() => onExploreModule('fees')}>Fee Accounts</span>
-              <span className="edu-nav-item" onClick={() => onExploreModule('attendance')}>Attendance &amp; Staff</span>
-              <span className="edu-nav-item" onClick={() => onExploreModule('transport')}>Transport Management</span>
-            </nav>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button onClick={onGoToLogin} className="edu-btn-secondary">
-              Sign in
-            </button>
-            <button onClick={onOpenDemo} className="edu-btn-primary">
-              Request a Walkthrough
-              <ChevronRight size={16} />
-            </button>
+      <header className="public-header">
+        <div className="public-header-inner">
+          <a href="/" aria-label="EduConnect home" className="public-brand"><EduConnectBrand compact className="landing-brand" /></a>
+          <button className="public-menu-toggle" type="button" onClick={() => setMobileMenuOpen(value => !value)} aria-expanded={mobileMenuOpen} aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}>
+            {mobileMenuOpen ? <X size={20}/> : <Menu size={20}/>}
+          </button>
+          <nav className={`public-nav ${mobileMenuOpen ? 'open' : ''}`} aria-label="Main navigation">
+            {previewModules.slice(0, 4).map(module => <button type="button" key={module.id} onClick={() => { setActiveTab(module.id); setMobileMenuOpen(false); document.getElementById('product-preview')?.scrollIntoView({ behavior: 'smooth' }); }}>{module.label}</button>)}
+          </nav>
+          <div className="public-header-actions">
+            <button type="button" className="public-signin" onClick={onGoToLogin}>Sign in</button>
+            <button type="button" className="public-primary public-header-cta" onClick={onOpenDemo}>Request a walkthrough <ArrowRight size={16}/></button>
           </div>
         </div>
       </header>
 
-      {/* 3. Hero Section */}
-      <section className="edu-hero">
-        <div className="edu-container">
-          <div className="edu-badge-mono">
-            <Sparkles size={13} /> School operations, connected
-          </div>
-          <h1 className="edu-hero-title">
-            One connected workspace for <span className="gradient-text">school teams and families.</span>
-          </h1>
-          <p className="edu-hero-subtitle">
-            Say goodbye to fragmented spreadsheets and legacy desktop software. EduConnect brings school administration, academics, and family workspaces together.
-          </p>
-
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginBottom: '40px' }}>
-            <button onClick={onOpenDemo} className="edu-btn-primary" style={{ padding: '14px 28px', fontSize: '15px' }}>
-              Request 1-on-1 School Demo
-              <ArrowRight size={18} />
-            </button>
-            <button onClick={onGoToLogin} className="edu-btn-secondary" style={{ padding: '14px 24px', fontSize: '15px' }}>
-              Launch ERP Workspace
-            </button>
-          </div>
-
-          {/* Interactive Preview Tabs */}
-          <div className="edu-tab-strip">
-            <button className={`edu-tab-pill ${activeTab === 'admissions' ? 'active' : ''}`} onClick={() => setActiveTab('admissions')}>
-              01. Admissions Funnel
-            </button>
-            <button className={`edu-tab-pill ${activeTab === 'academics' ? 'active' : ''}`} onClick={() => setActiveTab('academics')}>
-              02. Exams &amp; Homework
-            </button>
-            <button className={`edu-tab-pill ${activeTab === 'fees' ? 'active' : ''}`} onClick={() => setActiveTab('fees')}>
-              03. Fee Reconciliation
-            </button>
-            <button className={`edu-tab-pill ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
-              04. Attendance
-            </button>
-            <button className={`edu-tab-pill ${activeTab === 'transport' ? 'active' : ''}`} onClick={() => setActiveTab('transport')}>
-              05. Transport Preview
-            </button>
-          </div>
-
-          {/* Dynamic Interactive Stage Card */}
-          <div className="edu-stage-card">
-            <div className="edu-stage-head">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div className="edu-traffic-lights">
-                  <div className="edu-traffic-dot" style={{ background: '#ef4444' }} />
-                  <div className="edu-traffic-dot" style={{ background: '#f59e0b' }} />
-                  <div className="edu-traffic-dot" style={{ background: '#10b981' }} />
-                </div>
-                <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748b' }}>
-                  educonnect.school.workspace // {activeTab.toUpperCase()}
-                </span>
+      <main>
+        <section className="public-hero">
+          <div className="public-hero-inner">
+            <div className="public-hero-copy">
+              <div className="public-kicker"><span/> School operations, connected</div>
+              <h1>Make room for the work that matters at school.</h1>
+              <p>EduConnect brings student records, attendance, learning, and school operations into one organized workspace for school teams and families.</p>
+              <div className="public-hero-actions">
+                <button type="button" className="public-primary" onClick={onOpenDemo}>Request a walkthrough <ArrowRight size={17}/></button>
+                <button type="button" className="public-secondary" onClick={onGoToLogin}>Sign in to EduConnect</button>
               </div>
-              <button
-                onClick={() => onExploreModule(activeTab)}
-                style={{ background: 'transparent', border: 'none', color: '#16a34a', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                Explore interactive preview <ArrowRight size={13} />
-              </button>
+              <div className="public-trust-notes">
+                <span><Check size={15}/> School-scoped access</span>
+                <span><Check size={15}/> Role-based workspaces</span>
+              </div>
             </div>
-
-            {/* Simulated Product Preview */}
-            <div style={{ padding: '24px' }}>
-              {activeTab === 'admissions' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Lead Pipeline &amp; Conversion Tracker</h3>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>128 new enquiries captured this term with automated WhatsApp nurturing</p>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
-                      +34% Conversion vs 2025
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>ENQUIRY CAPTURE</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>64 Leads</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>ASSESSMENT TEST</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>28 Scheduled</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PROVISIONAL OFFER</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#eab308', marginTop: '4px' }}>19 Sent</div>
-                    </div>
-                    <div style={{ background: '#f0fdf4', padding: '14px', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
-                      <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 600 }}>CONFIRMED ENROLLED</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>17 Admitted</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'academics' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>CBSE Board-Ready Gradebook &amp; Report Generator</h3>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Term 2 Periodic Assessments compiled across all subjects</p>
-                    </div>
-                    <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
-                      Auto-Grade Calculator Active
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>CLASS AVERAGE</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>78.4% Overall</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>TOP PERFORMING</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>Mathematics (84%)</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>REPORT CARDS</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>1-Click PDF Ready</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'fees' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Real-Time Fee Invoicing &amp; Instant UPI Receipts</h3>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Reconciled automatically with Tally ERP and digital payment gateways</p>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
-                      98.2% Timely Collection
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>TOTAL COLLECTED (Q4)</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>₹ 42,80,000</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PENDING OUTSTANDING</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#ea580c', marginTop: '4px' }}>₹ 1,12,000</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>AUTO REMINDERS</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>Preview data</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'attendance' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Attendance Preview</h3>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Sample interface. Biometric hardware and SMS delivery are not connected.</p>
-                    </div>
-                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
-                      Today: 95.8% Present
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PRESENT TODAY</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>1,152 Students</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>UNEXCUSED ABSENT</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#dc2626', marginTop: '4px' }}>14 Students (Alerted)</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>STAFF ATTENDANCE</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>62 / 64 Faculty Present</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'transport' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Transport Preview · Sample Data</h3>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Parents receive dynamic notification 5 minutes before bus arrives at their stop</p>
-                    </div>
-                    <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '9999px' }}>
-                      12 / 12 Buses On-Time
-                    </span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>SPEED MONITORING</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>Zero Over-speeding</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>RFID BOARDING</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>410 Students Boarded</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>SAFETY PROTOCOL</div>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>CCTV &amp; SOS Active</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+            <div className="public-hero-visual">
+              <img src="/brand/educonnect-school-hero.webp" alt="A teacher helping two students review their schoolwork" />
+              <div className="hero-photo-caption"><span className="caption-mark"><Building2 size={16}/></span><span><strong>Built around the school day</strong><small>One workspace for school teams and families</small></span></div>
+              <div className="hero-preview-label">Original EduConnect school photography</div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* 4. Core Modules Feature Grid */}
-      <section className="edu-features-section">
-        <div className="edu-container">
-          <div style={{ textAlign: 'center', marginBottom: '50px' }}>
-            <div className="edu-badge-mono">Complete Enterprise Modules</div>
-            <h2 style={{ fontSize: '36px', fontWeight: 800, color: '#0f172a', margin: '12px 0 8px' }}>
-              Everything your institution needs, built natively into one suite.
-            </h2>
-            <p style={{ color: '#64748b', fontSize: '16px', maxWidth: '640px', margin: '0 auto' }}>
-              Engineered for CBSE, ICSE, State Boards, and International School chains.
-            </p>
+          <div className="public-capability-rail" aria-label="EduConnect capabilities">
+            <span>Student records</span><i/><span>Attendance</span><i/><span>Academics</span><i/><span>Fee accounts</span><i/><span>Communication</span>
           </div>
+        </section>
 
-          <div className="edu-grid-3">
-            <div className="edu-feature-card">
-              <div className="edu-feature-icon"><Users size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Admissions CRM</h3>
-              <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Multi-channel inquiry capture, automated lead scoring, document vault, and one-click student admission into the SIS.
-              </p>
-              <button onClick={() => onExploreModule('admissions')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
-                Explore Admissions CRM <ChevronRight size={15} />
-              </button>
+        <section className="product-preview-section" id="product-preview">
+          <div className="public-section-heading">
+            <span className="public-kicker">A clearer view of school operations</span>
+            <h2>One place to keep the day moving.</h2>
+            <p>Explore the modules available in EduConnect. This is a product preview and contains no school records.</p>
+          </div>
+          <div className="product-preview-layout">
+            <div className="preview-module-list" role="tablist" aria-label="Product areas">
+              {previewModules.map(module => { const Icon = module.icon; return <button type="button" role="tab" aria-selected={activeTab===module.id} className={activeTab===module.id?'active':''} key={module.id} onClick={() => setActiveTab(module.id)}><Icon size={18}/><span>{module.label}</span><ChevronRight size={15}/></button>; })}
             </div>
-
-            <div className="edu-feature-card">
-              <div className="edu-feature-icon"><DollarSign size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Smart Fee Management</h3>
-              <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Flexible fee structures, automatic WhatsApp reminders, online UPI/card payments, and bi-directional Tally ERP integration.
-              </p>
-              <button onClick={() => onExploreModule('fees')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
-                Explore Fee Operations <ChevronRight size={15} />
-              </button>
-            </div>
-
-            <div className="edu-feature-card">
-              <div className="edu-feature-icon"><BookOpen size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Exams &amp; Board Report Cards</h3>
-              <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Board-compliant grading rubrics (CBSE/ICSE), automated marks calculation, and 1-click batch report card PDF generation.
-              </p>
-              <button onClick={() => onExploreModule('academics')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
-                Explore Exam Suite <ChevronRight size={15} />
-              </button>
-            </div>
-
-            <div className="edu-feature-card">
-              <div className="edu-feature-icon"><Calendar size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Attendance &amp; Staff HR</h3>
-              <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Attendance workflows; hardware, SMS, and payroll integrations require provider setup.
-              </p>
-              <button onClick={() => onExploreModule('attendance')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
-                Explore Attendance Suite <ChevronRight size={15} />
-              </button>
-            </div>
-
-            <div className="edu-feature-card">
-              <div className="edu-feature-icon"><Bus size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Transport Preview Tracking</h3>
-              <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Sample route interface only. GPS tracking, RFID boarding, and parent alerts are unavailable.
-              </p>
-              <button onClick={() => onExploreModule('transport')} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
-                Explore Fleet Safety <ChevronRight size={15} />
-              </button>
-            </div>
-
-            <div className="edu-feature-card">
-              <div className="edu-feature-icon"><Layers size={26} /></div>
-              <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Parent &amp; Student Mobile App</h3>
-              <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
-                Branded iOS &amp; Android apps providing instant homework access, digital fee payments, circulars, and direct teacher chat.
-              </p>
-              <button onClick={onGoToLogin} style={{ border: 'none', background: 'transparent', color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: 0 }}>
-                Open Mobile Portals <ChevronRight size={15} />
-              </button>
+            <div className="preview-window" role="tabpanel">
+              <div className="preview-window-top"><EduConnectBrand compact/><span className="preview-only"><i/> Illustrative preview</span></div>
+              <div className="preview-window-body">
+                <div className="preview-window-rail"><span className="preview-rail-dot active"/><span/><span/><span/><span/></div>
+                <div className="preview-window-content">
+                  <div className="preview-module-heading"><span className="preview-module-icon"><ActiveIcon size={20}/></span><span><small>{activeModule.label}</small><strong>{activeModule.title}</strong></span></div>
+                  <p>{activeModule.detail}</p>
+                  <div className="preview-workspace-lines" aria-hidden="true"><div/><div/><div/><div/></div>
+                  <div className="preview-data-note"><FileText size={15}/> Illustrative interface. Sign in to view records available to your account.</div>
+                  <button type="button" className="preview-open-link" onClick={() => onExploreModule(activeTab)}>Explore this workspace <ArrowRight size={15}/></button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Product principles */}
-      <section style={{ background: '#0c1e33', color: '#ffffff', padding: '64px 0' }}>
-        <div className="edu-container">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '32px', textAlign: 'center' }}>
-            <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>New product</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Independent school workspaces</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>Tenant scoped</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>School-scoped access</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>Designed for</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>Secure operations</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '42px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.02em' }}>School teams</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8', marginTop: '6px' }}>One connected platform</div>
-            </div>
+        <section className="public-capabilities">
+          <div className="public-section-heading public-section-heading-left">
+            <span className="public-kicker">Designed for everyday coordination</span>
+            <h2>Less switching. Clearer handoffs.</h2>
+            <p>School teams can work from shared records while each person sees the areas permitted for their role.</p>
           </div>
-        </div>
-      </section>
+          <div className="capability-grid">
+            <article><span className="capability-index">01</span><h3>Keep student records together</h3><p>Manage admissions, class placement, profiles, and documents in the school workspace.</p><button type="button" onClick={() => onExploreModule('admissions')}>Admissions and students <ArrowRight size={15}/></button></article>
+            <article><span className="capability-index">02</span><h3>Coordinate teaching and learning</h3><p>Work with attendance, assignments, examinations, results, and timetables.</p><button type="button" onClick={() => onExploreModule('academics')}>Academic workspace <ArrowRight size={15}/></button></article>
+            <article><span className="capability-index">03</span><h3>Make school operations visible</h3><p>Track fee accounts, share announcements, and review operational reports.</p><button type="button" onClick={() => onExploreModule('fees')}>Operations workspace <ArrowRight size={15}/></button></article>
+          </div>
+        </section>
 
-      {/* 6. Footer */}
-      <footer style={{ background: '#09131f', color: '#64748b', padding: '40px 0 24px', fontSize: '13px' }}>
-        <div className="edu-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <EduConnectBrand inverse compact className="landing-footer-brand" />
-            <span>— School operations, connected</span>
-          </div>
-        </div>
+        <section className="public-role-section">
+          <div className="public-role-copy"><span className="public-kicker">A workspace for every part of school</span><h2>One school. The right view for each role.</h2><p>School leaders, teachers, families, and students use role-specific access to reach the information and workflows available to them.</p><button type="button" className="public-secondary" onClick={onGoToLogin}>Open your workspace</button></div>
+          <div className="public-role-list"><span><GraduationCap size={18}/> School leaders</span><span><BookOpen size={18}/> Teachers and academic teams</span><span><Users size={18}/> Parents and students</span><span><DollarSign size={18}/> Finance and operations</span></div>
+        </section>
+
+        <section className="public-cta-section">
+          <div><span className="public-kicker">EduConnect · Powered by CalmStacks</span><h2>See how it fits your school.</h2><p>Request a walkthrough of the school workflows and roles relevant to your team.</p></div>
+          <button type="button" className="public-primary" onClick={onOpenDemo}>Request a walkthrough <ArrowRight size={17}/></button>
+        </section>
+      </main>
+
+      <footer className="public-footer">
+        <EduConnectBrand inverse compact className="landing-footer-brand" />
+        <span>School operations, connected.</span>
+        <button type="button" onClick={onGoToLogin}>Sign in <ArrowRight size={15}/></button>
       </footer>
     </div>
   );

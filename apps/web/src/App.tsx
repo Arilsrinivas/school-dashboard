@@ -166,9 +166,9 @@ function EduConnectContactModal({ onClose }: { onClose: () => void }) {
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
               <Check size={28} />
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Request noted on this device</h3>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Walkthrough request draft</h3>
             <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px' }}>
-              This demo request is a local prototype and has not been sent. Contact CalmStacks to arrange an EduConnect walkthrough for <strong>{form.schoolName}</strong>.
+              This preview does not send or retain requests. Use your approved CalmStacks contact channel to arrange an EduConnect walkthrough for <strong>{form.schoolName}</strong>.
             </p>
             <button onClick={onClose} className="edu-btn-primary" style={{ width: '100%' }}>
               Done
@@ -236,7 +236,7 @@ function EduConnectContactModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
             <button type="submit" className="edu-btn-primary" style={{ width: '100%', marginTop: '6px', borderRadius: '8px' }}>
-              Confirm &amp; Request Demo Call
+              Save walkthrough draft
             </button>
           </form>
         )}
@@ -388,10 +388,10 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         <div className="art-copy">
           <div className="eyebrow-light"><span className="eyebrow-dot" /> MODERN SCHOOL PLATFORM</div>
           <h1 style={{ whiteSpace: 'pre-line' }}>{mode === 'register' ? 'Launch your school\nin seconds.' : 'Good schools\ngrow together.'}</h1>
-          <p>{mode === 'register' ? 'Set up an institutional workspace with automated grading, fees, student tracking, and parent circulars.' : 'A quieter, clearer way to manage every classroom, teacher, and student.'}</p>
+          <p>{mode === 'register' ? 'Set up an institutional workspace for student records, attendance, assignments, examinations, and fee accounts.' : 'A clear workspace for school teams, families, and students.'}</p>
           <div className="art-mini">
-            <div className="mini-avatar-row"><i>SC</i><i>AD</i><i>MK</i><i>+8</i></div>
-            <span>Trusted by forward-looking schools</span>
+            <ShieldCheck size={16}/>
+            <span>School access follows your assigned role and membership.</span>
           </div>
         </div>
         <div className="art-footer">
@@ -1121,7 +1121,7 @@ function SchoolOverviewView({
             <div className="security-status-item">
               <Check size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
               <div>
-                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Academic Year: {academicYear || '2026-2027'}</strong>
+                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Academic Year: {academicYear || 'Not configured'}</strong>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>Active enrollment and grading period</div>
               </div>
             </div>
@@ -1231,7 +1231,33 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
     return matched.slice(0, 4);
   }, [tabs]);
 
-  return <main className="school-app">
+  const navigationGroups = [
+    { label: 'Workspace', items: tabs.filter(item => ['overview', 'admissions', 'students'].includes(item)) },
+    { label: 'Learning', items: tabs.filter(item => ['classes', 'attendance', 'homework', 'exams', 'timetable'].includes(item)) },
+    { label: 'Operations', items: tabs.filter(item => ['transport', 'fees', 'announcements', 'reports', 'settings', 'access'].includes(item)) },
+  ].filter(group => group.items.length > 0);
+
+  return <div className="school-app school-shell">
+    <aside className="school-sidebar" aria-label="School workspace navigation">
+      <EduConnectBrand compact className="school-sidebar-brand" />
+      <div className="school-identity">
+        <span className="school-identity-mark"><Building2 size={16}/></span>
+        <span><strong>School workspace</strong><small>{user.schoolId || 'Current school'}</small></span>
+      </div>
+      {q.data?.currentAcademicYear&&<div className="school-year"><span>Academic year</span><strong>{q.data.currentAcademicYear.name}</strong></div>}
+      <nav className="school-sidebar-nav" aria-label="School modules">
+        {navigationGroups.map(group=><div className="school-nav-group" key={group.label}>
+          <span className="school-nav-group-label">{group.label}</span>
+          {group.items.map(item=>{const Icon=getTabIcon(item);return <button type="button" key={item} aria-current={tab===item?'page':undefined} className={`school-side-link ${tab===item?'active':''}`} onClick={()=>setTab(item)}><Icon size={17}/><span>{getTabLabel(item)}</span></button>;})}
+        </div>)}
+      </nav>
+      <div className="school-sidebar-profile">
+        <span className="school-user-avatar">{initials(user.name)}</span>
+        <span className="school-user-copy"><strong>{user.name}</strong><small>{user.schoolRoleName || user.schoolRole || user.role}</small></span>
+        <button type="button" className="school-signout" onClick={onLogout} aria-label="Sign out"><LogOut size={16}/></button>
+      </div>
+    </aside>
+    <div className="school-main">
     <header className="school-top">
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
         <button 
@@ -1243,6 +1269,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
           <Menu size={20} />
         </button>
         <EduConnectBrand compact className="school-top-brand" />
+        <div className="school-top-title"><span>School workspace</span><strong>{getTabLabel(tab)}</strong></div>
       </div>
       <div className="school-top-actions">
         <NotificationBell onOpenAnnouncements={() => { setTab('announcements'); setMobileMenuOpen(false); }} />
@@ -1319,10 +1346,11 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       </div>
     )}
 
-    <section className="school-welcome">
-      <div className="eyebrow">SCHOOL WORKSPACE <span className="heading-dash">/</span> {(user.schoolRoleName||user.schoolRole||user.role).toUpperCase()}</div>
-      <h1>Welcome, {user.name.split(' ')[0]}.</h1>
-      <p>Your school overview is ready. School ID <b>{user.schoolId}</b>{q.data?.currentAcademicYear&&<> · Academic year {q.data.currentAcademicYear.name}</>}</p>
+    <main className="school-main-content">
+    <section className="school-context-bar" aria-label="Current school context">
+      <span className="school-role-chip">{user.schoolRoleName||user.schoolRole||user.role}</span>
+      <span>{user.schoolId || 'School workspace'}</span>
+      {q.data?.currentAcademicYear&&<span>Academic year <strong>{q.data.currentAcademicYear.name}</strong></span>}
     </section>
 
     {tabs.length>0&&<div className="school-workbar">
@@ -1386,7 +1414,9 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       <span>Menu</span>
     </button>
   </nav>
-</main>;
+</main>
+    </div>
+  </div>;
 }
 
 function parseStudentCsv(text:string):Record<string,string>[]{
