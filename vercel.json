@@ -5,6 +5,10 @@
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "/api?__educonnect_path=:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
