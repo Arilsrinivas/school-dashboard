@@ -1,0 +1,17 @@
+{
+  "name": "EduConnect",
+  "short_name": "EduConnect",
+  "description": "School operations, connected. Powered by CalmStacks.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f6",
+  "theme_color": "#103d3a",
+  "icons": [
+    {
+      "src": "/brand/educonnect-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ build/
 .env.local
 apps/*/.env
 apps/*/.env.*
+/.secrets/
 !.env.example
 coverage/
 *.log

@@ -159,7 +159,7 @@ export default function AdmissionsWorkspace({ onAdmitStudent }: { onAdmitStudent
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <Sparkles size={14} /> Schoollog Admissions CRM
+            <Sparkles size={14} /> EduConnect Admissions · Simulation with sample data
           </div>
           <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: '4px 0 6px', letterSpacing: '-0.02em' }}>
             Admissions Pipeline &amp; Enquiry Funnel

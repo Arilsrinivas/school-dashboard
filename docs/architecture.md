@@ -59,4 +59,4 @@ Passwords use Argon2id. Access tokens are short-lived and signed with a secret o
 
 ## File and asynchronous work
 
-Files live in private S3-compatible storage. PostgreSQL stores metadata, tenant, uploader, checksum, size, and MIME type; downloads are authorized before short-lived signed URLs are issued. A future worker queue must include `schoolId`, actor, and idempotency key in every tenant job, revalidate the school status, and use tenant-scoped database transactions. Never place student data in generic cache keys or logs.
+File objects live in private Supabase Storage buckets; PostgreSQL remains the source of truth for identity, school memberships, permissions, and file metadata. Firebase Auth supplies identity, and the API checks active membership, roles, and student/assignment relationships before using the server-only Supabase service key. Authorized downloads receive 120-second signed URLs. Never log or persist signed URLs, student data, or service keys. A future worker queue must include `schoolId`, actor, and idempotency key in every tenant job, revalidate the school status, and use tenant-scoped database transactions.

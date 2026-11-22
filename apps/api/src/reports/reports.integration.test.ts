@@ -5,6 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import express from 'express';
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
+import { strFromU8, unzipSync } from 'fflate';
 
 process.env.NODE_ENV = 'test';
 process.env.ACCESS_TOKEN_SECRET = 'local-test-access-secret-that-is-long-enough';
@@ -12,6 +13,7 @@ process.env.REFRESH_TOKEN_SECRET = 'different-local-test-refresh-secret-long-eno
 
 test('reports dashboard metrics, academic aggregates, attendance breakdown, export and school isolation use PostgreSQL', async () => {
   const db = await PGlite.create();
+    await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   const migrationDir = new URL('../../migrations/', import.meta.url);
   const migrationNames = (await readdir(migrationDir)).filter(name => name.endsWith('.sql')).sort();
   for (const name of migrationNames) {
@@ -19,7 +21,7 @@ test('reports dashboard metrics, academic aggregates, attendance breakdown, expo
     sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/, '');
     await db.exec(sql);
   }
-  await db.exec(`CREATE ROLE educonnect_app LOGIN NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN BYPASSRLS; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;`);
+  await db.exec(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;`);
   const socket = new PGLiteSocketServer({ db, host: '127.0.0.1', port: 0, maxConnections: 16 });
   await socket.start();
   const port = Number(socket.getServerConn().split(':').at(-1));
@@ -115,6 +117,24 @@ test('reports dashboard metrics, academic aggregates, attendance breakdown, expo
     const csvContent = await exportCsv.text();
     assert.ok(csvContent.includes('admission_number'));
     assert.ok(csvContent.includes('Sara'));
+
+    const exportXlsx = await call('/api/school/reports/export?type=students&format=xlsx', adminA.token);
+    assert.equal(exportXlsx.status, 200);
+    assert.ok(exportXlsx.headers.get('content-type')?.includes('spreadsheetml'));
+    const xlsxBytes = new Uint8Array(await exportXlsx.arrayBuffer());
+    assert.ok(xlsxBytes.byteLength > 100);
+    const xlsxParts = unzipSync(xlsxBytes);
+    assert.ok(xlsxParts['xl/worksheets/sheet1.xml']);
+    const sheetXml = strFromU8(xlsxParts['xl/worksheets/sheet1.xml']!);
+    assert.match(sheetXml, /admission_number/);
+    assert.match(sheetXml, /Sara/);
+    const exportPdf = await call('/api/school/reports/export?type=students&format=pdf', adminA.token);
+    assert.equal(exportPdf.status, 200);
+    assert.ok(exportPdf.headers.get('content-type')?.includes('application/pdf'));
+    assert.ok((await exportPdf.arrayBuffer()).byteLength > 100);
+    const examExport = await call('/api/school/reports/export?type=examinations&format=csv', adminA.token);
+    assert.equal(examExport.status, 200, await examExport.clone().text());
+    assert.match(await examExport.text(), /examination|No data/);
 
     // 5. Cross-school isolation (School B sees 0 students for School B)
     const crossDash = await call('/api/school/reports/dashboard', adminB.token);

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { tenantTransaction, type DbClient } from '../db/pool.js';
 import { asyncRoute, fail } from '../http.js';
 import { authenticate, requireSchoolPermission } from '../middleware/auth.js';
+import PDFDocument from 'pdfkit';
+import { strToU8, zipSync } from 'fflate';
 
 export const reportsRouter = Router();
 reportsRouter.use(authenticate);
@@ -20,6 +22,44 @@ function escapeCsvCell(val: unknown): string {
     str = `"${str.replace(/"/g, '""')}"`;
   }
   return str;
+}
+
+function xmlEscape(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;',
+  })[char]!);
+}
+
+function columnName(index: number): string {
+  let name = '';
+  for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
+    name = String.fromCharCode(65 + ((value - 1) % 26)) + name;
+  }
+  return name;
+}
+
+function createXlsx(sheetName: string, rows: Record<string, unknown>[]): Uint8Array {
+  const headers = rows.length ? Object.keys(rows[0]!) : [];
+  const values = [headers, ...rows.map(row => headers.map(header => row[header]))];
+  const worksheetRows = values.map((row, rowIndex) => {
+    const cells = row.map((value, columnIndex) => {
+      const address = `${columnName(columnIndex)}${rowIndex + 1}`;
+      if (typeof value === 'number' && Number.isFinite(value)) return `<c r="${address}"><v>${value}</v></c>`;
+      if (typeof value === 'boolean') return `<c r="${address}" t="b"><v>${value ? 1 : 0}</v></c>`;
+      const text = xmlEscape(value instanceof Date ? value.toISOString() : value);
+      return `<c r="${address}" t="inlineStr"><is><t xml:space="preserve">${text}</t></is></c>`;
+    }).join('');
+    return `<row r="${rowIndex + 1}">${cells}</row>`;
+  }).join('');
+  const safeSheetName = xmlEscape(sheetName.slice(0, 31));
+  const files: Record<string, Uint8Array> = {
+    '[Content_Types].xml': strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'),
+    '_rels/.rels': strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+    'xl/workbook.xml': strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${safeSheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+    'xl/_rels/workbook.xml.rels': strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'),
+    'xl/worksheets/sheet1.xml': strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${worksheetRows}</sheetData></worksheet>`),
+  };
+  return zipSync(files, { level: 6 });
 }
 
 reportsRouter.get(
@@ -167,7 +207,7 @@ reportsRouter.get(
   requireSchoolPermission('reports:read'),
   asyncRoute(async (req, res) => {
     const schoolId = req.tenant!.id;
-    const type = z.enum(['students', 'fees', 'attendance']).parse(req.query.type);
+    const type = z.enum(['students', 'fees', 'attendance', 'examinations']).parse(req.query.type);
 
     const rows = await tenantTransaction(schoolId, async client => {
       if (type === 'students') {
@@ -197,7 +237,7 @@ reportsRouter.get(
           [schoolId]
         );
         return q.rows;
-      } else {
+      } else if (type === 'attendance') {
         const q = await client.query(
           `SELECT a.attendance_date, st.admission_number, st.first_name || ' ' || st.last_name AS student_name,
                   c.name AS class_name, a.status, a.reason
@@ -207,6 +247,20 @@ reportsRouter.get(
            WHERE a.school_id = $1 ORDER BY a.attendance_date DESC, st.admission_number LIMIT 1000`,
           [schoolId]
         );
+        return q.rows;
+      } else {
+        const q = await client.query(
+          `SELECT e.name AS examination, e.exam_type, c.name AS class_name, s.name AS subject_name,
+                  st.admission_number, st.first_name || ' ' || st.last_name AS student_name,
+                  r.marks, es.max_marks, r.grade
+           FROM examination_results r
+           JOIN examination_subjects es ON es.school_id=r.school_id AND es.id=r.examination_subject_id
+           JOIN examinations e ON e.school_id=es.school_id AND e.id=es.examination_id
+           JOIN classes c ON c.school_id=es.school_id AND c.id=es.class_id
+           JOIN subjects s ON s.school_id=es.school_id AND s.id=es.subject_id
+           JOIN students st ON st.school_id=r.school_id AND st.id=r.student_id
+           WHERE r.school_id=$1 AND e.results_published_at IS NOT NULL
+           ORDER BY e.starts_on DESC,c.name,st.admission_number,s.name LIMIT 10000`, [schoolId]);
         return q.rows;
       }
     });
@@ -221,6 +275,33 @@ reportsRouter.get(
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${type}-report.csv"`);
       return res.send(csv);
+    }
+
+    if (req.query.format === 'xlsx') {
+      const buffer = createXlsx(type, rows as Record<string, unknown>[]);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${type}-report.xlsx"`);
+      return res.send(Buffer.from(buffer));
+    }
+
+    if (req.query.format === 'pdf') {
+      const doc = new PDFDocument({ autoFirstPage: true, margin: 40, size: 'A4', layout: 'landscape' });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${type}-report.pdf"`);
+      doc.pipe(res);
+      doc.fontSize(18).text(`${type[0]!.toUpperCase()}${type.slice(1)} report`, { align: 'center' }).moveDown();
+      if (!rows.length) doc.fontSize(10).text('No data');
+      else {
+        const headers = Object.keys(rows[0]!);
+        doc.fontSize(7).text(headers.join('  |  '), { continued: false }).moveDown(0.4);
+        for (const row of rows) {
+          const line = headers.map(h => String((row as Record<string, unknown>)[h] ?? '').replace(/[\r\n]+/g, ' ')).join('  |  ');
+          if (doc.y > 540) doc.addPage();
+          doc.fontSize(6).text(line, { width: 760 });
+        }
+      }
+      doc.end();
+      return;
     }
 
     res.json({ items: rows });

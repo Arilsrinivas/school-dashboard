@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
+import pg from 'pg';
 import argon2 from 'argon2';
+import { MIGRATION_SCRIPTS } from './migrationsData.js';
 
 process.env.NODE_ENV='test';
 process.env.ACCESS_TOKEN_SECRET='local-test-access-secret-that-is-long-enough';
@@ -12,15 +14,18 @@ process.env.REFRESH_TOKEN_SECRET='different-local-test-refresh-secret-long-enoug
 
 test('school authority, tenant isolation, parent and teacher scopes, and approved support access use PostgreSQL',async()=>{
   const db=await PGlite.create();
+  await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   const migrationDir=new URL('../../migrations/',import.meta.url);
   const migrationNames=(await readdir(migrationDir)).filter(name=>name.endsWith('.sql')).sort();
+  assert.deepEqual(MIGRATION_SCRIPTS.map(migration=>migration.name).sort(),migrationNames,'the deployable migration bundle contains every migration file');
   for(const name of migrationNames){
     let sql=await readFile(new URL(name,migrationDir),'utf8');
+    assert.equal(MIGRATION_SCRIPTS.find(migration=>migration.name===name)?.sql.trimEnd(),sql.trimEnd(),`${name} matches the deployable migration bundle`);
     // PGlite includes PostgreSQL's gen_random_uuid but not the optional pgcrypto extension.
     sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/,'');
     await db.exec(sql);
   }
-  await db.exec(`CREATE ROLE educonnect_app LOGIN NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN BYPASSRLS; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;`);
+  await db.exec(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;`);
   const socket=new PGLiteSocketServer({db,host:'127.0.0.1',port:0,maxConnections:16});
   await socket.start();
   const port=Number(socket.getServerConn().split(':').at(-1));
@@ -28,11 +33,46 @@ test('school authority, tenant isolation, parent and teacher scopes, and approve
   process.env.PLATFORM_DATABASE_URL=`postgresql://educonnect_platform@127.0.0.1:${port}/postgres?sslmode=disable`;
   process.env.MIGRATION_DATABASE_URL=process.env.PLATFORM_DATABASE_URL;
 
-  const [{pool,platformPool,tenantTransaction},{signAccess},{app}]=await Promise.all([import('./pool.js'),import('../auth/tokens.js'),import('../server.js')]);
+  const [{pool,platformPool,tenantTransaction,tenantTransactionUsing,verifyRuntimeDatabaseRoles},{signAccess},{app}]=await Promise.all([import('./pool.js'),import('../auth/tokens.js'),import('../server.js')]);
+  const rlsTables = [
+    'school_memberships','users','attendance_history','assignment_attachments',
+    'assignment_audit_history','examination_grading_scales','examination_audit_history',
+    'timetable_periods','timetable_audit_history','fee_receipt_sequences',
+    'payment_reversals','announcement_audit_history'
+  ];
+  const rlsState = await platformPool.query<{relname:string;relrowsecurity:boolean;relforcerowsecurity:boolean}>(
+    `SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity
+       FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relname=ANY($1::text[])`,
+    [rlsTables]
+  );
+  assert.equal(rlsState.rowCount,rlsTables.length,'every operations table has an RLS catalog entry');
+  for(const table of rlsState.rows){
+    assert.equal(table.relrowsecurity,true,`${table.relname} has RLS enabled`);
+    assert.equal(table.relforcerowsecurity,true,`${table.relname} forces RLS for table owners`);
+  }
   // PGlite's socket protocol authenticates every session as its bootstrap superuser;
   // use real database roles per application pool to exercise production RLS policies.
   pool.on('acquire',client=>{void client.query('SET ROLE educonnect_app');});
   platformPool.on('acquire',client=>{void client.query('SET ROLE educonnect_platform');});
+  await verifyRuntimeDatabaseRoles();
+  const tenantTablePolicyState=await platformPool.query<{relname:string;relrowsecurity:boolean;relforcerowsecurity:boolean;tenant_policy_count:number}>(`
+    SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,
+           count(p.oid) FILTER(WHERE p.polname<>'platform_runtime_access')::int AS tenant_policy_count
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      JOIN pg_attribute a ON a.attrelid=c.oid AND a.attname='school_id' AND NOT a.attisdropped
+      LEFT JOIN pg_policy p ON p.polrelid=c.oid
+     WHERE n.nspname='public' AND c.relkind='r'
+     GROUP BY c.oid,c.relname,c.relrowsecurity,c.relforcerowsecurity ORDER BY c.relname`);
+  assert.ok((tenantTablePolicyState.rowCount??0)>0,'tenant table inventory was discovered from PostgreSQL catalogs');
+  for(const table of tenantTablePolicyState.rows){
+    assert.equal(table.relrowsecurity,true,`${table.relname} enables RLS`);
+    assert.equal(table.relforcerowsecurity,true,`${table.relname} forces RLS`);
+    assert.ok(table.tenant_policy_count>0,`${table.relname} retains a school-scoped policy alongside platform access`);
+  }
+  const runtimeRoleState=await platformPool.query<{rolname:string;rolsuper:boolean;rolbypassrls:boolean}>(`SELECT rolname,rolsuper,rolbypassrls FROM pg_roles WHERE rolname=ANY($1::text[])`,[['educonnect_app','educonnect_platform']]);
+  assert.equal(runtimeRoleState.rowCount,2);
+  for(const role of runtimeRoleState.rows){assert.equal(role.rolsuper,false,`${role.rolname} is not superuser`);assert.equal(role.rolbypassrls,false,`${role.rolname} does not bypass RLS`);}
   const createdSchools:string[]=[],createdUsers:string[]=[],createdPlatformUsers:string[]=[];
   const httpServer=app.listen(0);await new Promise<void>(resolve=>httpServer.once('listening',resolve));
   const address=httpServer.address();assert.ok(address&&typeof address==='object');const base=`http://127.0.0.1:${address.port}`;
@@ -51,6 +91,7 @@ test('school authority, tenant isolation, parent and teacher scopes, and approve
     assert.notEqual(schoolA.school_id,schoolB.school_id,'school creation assigns distinct School IDs');
     const acceptAdmin=async(school:{school_id:string;initialAdminToken:string},name:string)=>{const accepted=await call('/api/auth/accept-invitation',superToken,{method:'POST',body:JSON.stringify({token:school.initialAdminToken,name,password:'initial-school-admin-password-001'})});assert.equal(accepted.status,201,'each school initial administrator invitation can be accepted');const result=await accepted.json() as {accessToken:string;user:{id:string}};createdUsers.push(result.user.id);return {id:result.user.id,accessToken:result.accessToken};};
     const adminAAccount=await acceptAdmin(schoolA,'Admin A'),adminBAccount=await acceptAdmin(schoolB,'Admin B'),adminA=adminAAccount.id,adminB=adminBAccount.id,adminToken=adminAAccount.accessToken,adminBToken=adminBAccount.accessToken;
+    const schoolAdminPlatformAccess=await call('/api/platform/schools',adminToken);assert.equal(schoolAdminPlatformAccess.status,403,'a school administrator cannot access platform administration');
     const teacherA=randomUUID(),parentA=randomUUID(),studentSelfUser=randomUUID();createdUsers.push(teacherA,parentA,studentSelfUser);
     for(const [id,label] of [[teacherA,'Teacher A'],[parentA,'Parent A'],[studentSelfUser,'Student A']] as const){await platformPool.query('INSERT INTO users(id,email,name,password_hash) VALUES($1,$2,$3,$4)',[id,`${randomUUID()}@test.invalid`,label,'not-used']);}
     const addMembership=async(schoolId:string,userId:string,kind:string,code:string)=>tenantTransaction(schoolId,async client=>{
@@ -84,6 +125,25 @@ test('school authority, tenant isolation, parent and teacher scopes, and approve
       const student=(await client.query("INSERT INTO students(school_id,admission_number,first_name) VALUES($1,$2,'Secret Student B') RETURNING id",[schoolB.id,randomUUID()])).rows[0].id;
       await client.query('INSERT INTO student_enrollments(school_id,student_id,academic_year_id,class_id) VALUES($1,$2,$3,$4)',[schoolB.id,student,year,klass]);return {year,klass,student};
     });
+    const unauthorizedRead=await tenantTransaction(schoolA.id,client=>client.query('SELECT id FROM students WHERE school_id=$1 AND id=$2',[schoolB.id,dataB.student]));
+    assert.equal(unauthorizedRead.rowCount,0,'tenant A cannot read tenant B rows with NOBYPASSRLS');
+    const unauthorizedUpdate=await tenantTransaction(schoolA.id,client=>client.query("UPDATE students SET first_name='Tampered' WHERE school_id=$1 AND id=$2",[schoolB.id,dataB.student]));
+    assert.equal(unauthorizedUpdate.rowCount,0,'tenant A cannot update tenant B rows');
+    const unauthorizedDelete=await tenantTransaction(schoolA.id,client=>client.query('DELETE FROM students WHERE school_id=$1 AND id=$2',[schoolB.id,dataB.student]));
+    assert.equal(unauthorizedDelete.rowCount,0,'tenant A cannot delete tenant B rows');
+    await assert.rejects(()=>tenantTransaction(schoolA.id,client=>client.query("INSERT INTO students(school_id,admission_number,first_name) VALUES($1,$2,'Unauthorized')",[schoolB.id,randomUUID()])),/row-level security|policy/,'tenant A cannot insert a row for tenant B');
+    assert.equal((await pool.query('SELECT id FROM students')).rowCount,0,'missing tenant context returns no tenant rows');
+    await assert.rejects(()=>pool.query("INSERT INTO students(school_id,admission_number,first_name) VALUES($1,$2,'No Context')",[schoolA.id,randomUUID()]),/row-level security|policy/,'missing tenant context blocks inserts');
+    const reusePool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1});
+    const reuseClient=await reusePool.connect();await reuseClient.query('SET ROLE educonnect_app');reuseClient.release();
+    try{
+      const seenA=await tenantTransactionUsing(reusePool,schoolA.id,client=>client.query('SELECT id FROM schools WHERE id=$1',[schoolA.id]));assert.equal(seenA.rowCount,1);
+      const afterCommit=await reusePool.query<{tenant_id:string|null;visible_schools:number}>("SELECT current_setting('app.school_id',true) AS tenant_id,(SELECT count(*)::int FROM schools) AS visible_schools");
+      const reusedState=afterCommit.rows[0];assert.ok(reusedState);
+      assert.ok(!reusedState.tenant_id,'transaction-local tenant context resets when the pooled connection is returned');
+      assert.equal(reusedState.visible_schools,0,'reused connection has no prior tenant visibility');
+      const seenB=await tenantTransactionUsing(reusePool,schoolB.id,client=>client.query('SELECT id FROM schools WHERE id=$1',[schoolB.id]));assert.equal(seenB.rowCount,1);
+    }finally{await reusePool.end();}
     const [teacherToken,parentToken,studentToken]=await Promise.all([tokenFor(teacherA,'teacher',schoolA.id),tokenFor(parentA,'parent',schoolA.id),tokenFor(studentSelfUser,'student',schoolA.id)]);
 
     // Attendance stage gate: class roster reads, atomic bulk marking, immutable corrections,

@@ -9,6 +9,7 @@ import { asyncRoute, fail } from '../http.js';
 import { authenticate } from '../middleware/auth.js';
 import { hashRefresh, newRefreshSecret, readAccess, signAccess } from './tokens.js';
 import { verifyGoogleIdToken } from './google.js';
+import { revokeFirebaseSessions, verifyFirebaseIdToken } from './firebase-admin.js';
 
 export const authRouter = Router();
 const loginSchema = z.object({ email: z.string().email().max(254), password: z.string().min(1).max(200), schoolId: z.string().optional() });
@@ -546,6 +547,56 @@ const handleGoogleLink = async (req: import('express').Request, res: import('exp
 };
 
 authRouter.post('/google/link', asyncRoute(handleGoogleLink));
+
+// Migration-safe account claim: requires an existing EduConnect authenticated session
+// and a separately verified, email-verified Firebase identity. Email alone never links accounts.
+authRouter.post('/firebase/link', asyncRoute(async(req,res)=>{
+  const firebaseToken=req.header('authorization')?.match(/^Bearer (.+)$/i)?.[1];
+  const legacyToken=req.header('x-educonnect-legacy-token');
+  if(!firebaseToken||!legacyToken)fail(401,'Both Firebase authentication and an existing EduConnect session are required');
+  const [firebaseUser,legacyIdentity]=await Promise.all([verifyFirebaseIdToken(firebaseToken),readAccess(legacyToken)]);
+  if(!firebaseUser.email_verified||!firebaseUser.email)fail(403,'Verify the Firebase email address before linking');
+  let accountEmail:string|undefined;
+  if(legacyIdentity.kind==='platform'){
+    const account=await platformPool.query('SELECT email,is_active FROM platform_users WHERE id=$1',[legacyIdentity.id]);
+    if(!account.rows[0]?.is_active)fail(403,'Existing account is inactive');accountEmail=account.rows[0].email;
+  }else if(legacyIdentity.schoolId){
+    const account=await tenantTransaction(legacyIdentity.schoolId,client=>client.query(`SELECT u.email,u.is_active FROM users u JOIN school_memberships m ON m.user_id=u.id AND m.school_id=$2 AND m.is_active WHERE u.id=$1`,[legacyIdentity.id,legacyIdentity.schoolId]));
+    if(!account.rows[0]?.is_active)fail(403,'Existing school account is inactive');accountEmail=account.rows[0].email;
+  }
+  if(!accountEmail||accountEmail.toLowerCase()!==firebaseUser.email.toLowerCase())fail(403,'Firebase email must match the authenticated EduConnect account to claim it');
+  const already=await platformPool.query('SELECT user_kind,user_id FROM external_identities WHERE provider=$1 AND provider_subject_id=$2',['firebase',firebaseUser.uid]);
+  if(already.rows[0]&&(already.rows[0].user_kind!==legacyIdentity.kind||already.rows[0].user_id!==legacyIdentity.id))fail(409,'Firebase identity is already linked to a different EduConnect account');
+  if(legacyIdentity.kind==='platform'){
+    await platformPool.query(`INSERT INTO external_identities(user_kind,user_id,provider,provider_subject_id,email) VALUES('platform',$1,'firebase',$2,lower($3)) ON CONFLICT(user_kind,user_id,provider) DO UPDATE SET provider_subject_id=EXCLUDED.provider_subject_id,email=EXCLUDED.email,last_authenticated_at=now()`,[legacyIdentity.id,firebaseUser.uid,firebaseUser.email]);
+    await platformPool.query(`INSERT INTO platform_audit_logs(actor_id,action,target_type,target_id,metadata) VALUES($1,'auth.firebase_linked','platform_user',$1,$2::jsonb)`,[legacyIdentity.id,JSON.stringify({email:firebaseUser.email})]);
+  } else {
+    await tenantTransaction(legacyIdentity.schoolId!,async client=>{
+      await client.query(`INSERT INTO external_identities(user_kind,user_id,provider,provider_subject_id,email) VALUES('school',$1,'firebase',$2,lower($3)) ON CONFLICT(user_kind,user_id,provider) DO UPDATE SET provider_subject_id=EXCLUDED.provider_subject_id,email=EXCLUDED.email,last_authenticated_at=now()`,[legacyIdentity.id,firebaseUser.uid,firebaseUser.email]);
+      await client.query(`INSERT INTO audit_logs(school_id,action,target_type,target_id,metadata) VALUES($1,'auth.firebase_linked','user',$2,$3::jsonb)`,[legacyIdentity.schoolId,legacyIdentity.id,JSON.stringify({email:firebaseUser.email})]);
+    });
+  }
+  res.status(201).json({linked:true});
+}));
+
+authRouter.post('/firebase/logout',asyncRoute(async(req,res)=>{
+  const token=req.header('authorization')?.match(/^Bearer (.+)$/i)?.[1];if(!token)fail(401,'Firebase authentication required');
+  const user=await verifyFirebaseIdToken(token);await revokeFirebaseSessions(user.uid);res.status(204).end();
+}));
+
+authRouter.get('/firebase/context',asyncRoute(async(req,res)=>{
+  const token=req.header('authorization')?.match(/^Bearer (.+)$/i)?.[1];if(!token)fail(401,'Firebase authentication required');
+  const firebaseUser=await verifyFirebaseIdToken(token);if(firebaseUser.email&&!firebaseUser.email_verified)fail(403,'Verify your email address');
+  const mapping=await platformPool.query<{user_kind:'platform'|'school';user_id:string}>(`SELECT user_kind,user_id FROM external_identities WHERE provider='firebase' AND provider_subject_id=$1`,[firebaseUser.uid]);
+  if(!mapping.rows[0])fail(403,'Firebase account is not linked; sign in with the existing EduConnect account to securely link it');
+  if(mapping.rows[0].user_kind==='platform'){
+    const user=await platformPool.query(`SELECT u.id,u.name,r.name AS role FROM platform_users u JOIN platform_roles r ON r.id=u.role_id WHERE u.id=$1 AND u.is_active`,[mapping.rows[0].user_id]);
+    if(!user.rows[0])fail(403,'Platform account is inactive');return res.json({user:user.rows[0],schools:[]});
+  }
+  const memberships=await platformPool.query(`SELECT s.school_id,s.name,m.role,r.code AS school_role,r.name AS school_role_name FROM users u JOIN school_memberships m ON m.user_id=u.id AND m.is_active JOIN schools s ON s.id=m.school_id AND s.status='active' AND s.deleted_at IS NULL JOIN school_roles r ON r.school_id=m.school_id AND r.id=m.school_role_id WHERE u.id=$1 AND u.is_active AND EXISTS(SELECT 1 FROM subscriptions sub WHERE sub.school_id=s.id AND sub.status IN ('active','trialing') AND (sub.expires_at IS NULL OR sub.expires_at>now() OR sub.grace_until>now())) ORDER BY s.name`,[mapping.rows[0].user_id]);
+  if(!memberships.rows.length)fail(403,'No active EduConnect school memberships');
+  res.json({user:{id:mapping.rows[0].user_id,name:memberships.rows[0].name},schools:memberships.rows});
+}));
 authRouter.post('/external-identities/link', asyncRoute(handleGoogleLink));
 
 authRouter.get('/external-identities', authenticate, asyncRoute(async (req, res) => {
@@ -743,7 +794,7 @@ authRouter.post('/accept-invitation', asyncRoute(async(req,res)=>{
     await client.query("INSERT INTO audit_logs(school_id,action,target_type,target_id,metadata) VALUES($1,'invitation.accepted','user',$2,'{}')",[invite.school_id,user.id]);
     await client.query('COMMIT');
     const accessToken=await issueSession('school',user.id,{kind:'school',id:user.id,role:invite.role,schoolId:invite.school_id},res);
-    res.status(201).json({accessToken,user:{id:user.id,name:user.name,role:invite.role,schoolRole:tenant.rows[0].role_code,schoolRoleName:tenant.rows[0].role_name,permissions:permissions.rows.map(row=>row.permission_key),schoolId:tenant.rows[0].display_id}});
+    res.status(201).json({accessToken,user:{id:user.id,name:user.name,email:invite.email,role:invite.role,schoolRole:tenant.rows[0].role_code,schoolRoleName:tenant.rows[0].role_name,permissions:permissions.rows.map(row=>row.permission_key),schoolId:tenant.rows[0].display_id}});
   } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }));
 

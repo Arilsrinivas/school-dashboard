@@ -1,7 +1,9 @@
 import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { env } from '../config.js';
-import { MIGRATION_SCRIPTS } from './migrationsData.js';
+import { assertEduConnectDatabaseTarget } from './target-identity.js';
 
 let migratedPromise: Promise<void> | null = null;
 
@@ -20,13 +22,20 @@ export async function runMigrations(): Promise<void> {
     }
 
     function getSsl(url: string) {
-      if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('sslmode=disable')) {
+      const local=url.includes('127.0.0.1')||url.includes('localhost');
+      if(local&&url.includes('sslmode=disable')){
         return undefined;
       }
-      return { rejectUnauthorized: false };
+      if(!local&&url.includes('sslmode=disable'))throw new Error('Remote PostgreSQL migrations cannot disable TLS');
+      return { rejectUnauthorized: true,...(env.DATABASE_SSL_CA_CERT_PATH?{ca:readFileSync(env.DATABASE_SSL_CA_CERT_PATH,'utf8')}: {}) };
     }
 
     const connStr = env.MIGRATION_DATABASE_URL || env.PLATFORM_DATABASE_URL || env.DATABASE_URL;
+    const expectedProjectRef = process.env.EDUCONNECT_DATABASE_PROJECT_REF?.trim();
+    if (!expectedProjectRef) {
+      throw new Error('Set EDUCONNECT_DATABASE_PROJECT_REF to the verified EduConnect Supabase project reference before schema initialization');
+    }
+    assertEduConnectDatabaseTarget(env.DATABASE_URL,connStr,expectedProjectRef);
     const migrationPool = new pg.Pool({
       connectionString: cleanConnectionString(connStr),
       max: 2,
@@ -38,20 +47,25 @@ export async function runMigrations(): Promise<void> {
       // Advisory lock (lock key 8492048) prevents concurrent migration runs across multiple deployment workers
       await client.query('SELECT pg_advisory_lock(8492048)');
       try {
-        await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-        for (const { name, sql } of MIGRATION_SCRIPTS) {
-          const exists = await client.query('SELECT 1 FROM schema_migrations WHERE name=$1', [name]);
-          if (exists.rowCount) continue;
-          await client.query('BEGIN');
-          try {
-            await client.query(sql);
-            await client.query('INSERT INTO schema_migrations(name) VALUES($1)', [name]);
-            await client.query('COMMIT');
-            console.info(`[Database Migration] Applied ${name}`);
-          } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-          }
+        const identity = await client.query<{database:string;host:string;project:string|null;relation_count:number;has_history:boolean}>({
+          text: `SELECT current_database() AS database,inet_server_addr()::text AS host,
+            current_setting('supabase.project_ref',true) AS project,
+            (SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p')) AS relation_count,
+            to_regclass('public.schema_migrations') IS NOT NULL AS has_history`
+        });
+        const actual = identity.rows[0]!;
+        if (actual.database !== 'postgres' || (actual.project && actual.project !== expectedProjectRef)) throw new Error('Connected PostgreSQL identity does not match the designated EduConnect database');
+        if (actual.relation_count !== 0 || actual.has_history) throw new Error('Refusing fresh initialization: public schema is not empty');
+        const sql = await readFile(new URL('../../schema/educonnect.initial.sql', import.meta.url), 'utf8');
+        await client.query('BEGIN');
+        try {
+          await client.query(sql);
+          await client.query("INSERT INTO schema_migrations(name) VALUES('educonnect.initial.sql')");
+          await client.query('COMMIT');
+          console.info('Applied consolidated EduConnect fresh-install schema.');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
         }
       } finally {
         await client.query('SELECT pg_advisory_unlock(8492048)');

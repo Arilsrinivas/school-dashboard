@@ -1,23 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Activity, ArrowDownRight, ArrowUpRight, Award, BarChart3, Bell, BookOpen, Building2, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock, Clock3, CreditCard, Download, FileText, Filter, GraduationCap, Layers, LayoutDashboard, LogOut, Menu, MoreHorizontal, Plus, Receipt, Search, Settings, Settings2, ShieldAlert, ShieldCheck, SlidersHorizontal, Sparkles, UserCheck, UserPlus, Users, X } from 'lucide-react';
-import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, request, restoreSession, type School, type User, type GoogleAuthResult } from './api';
-import AttendanceWorkspace from './AttendanceWorkspace';
-import HomeworkWorkspace from './HomeworkWorkspace';
-import ExamsWorkspace from './ExamsWorkspace';
-import TimetableWorkspace from './TimetableWorkspace';
-import FeesWorkspace from './FeesWorkspace';
-import AnnouncementsWorkspace from './AnnouncementsWorkspace';
-import ReportsWorkspace from './ReportsWorkspace';
-import SettingsWorkspace from './SettingsWorkspace';
-import NotificationBell from './NotificationBell';
-import SchoollogLanding from './SchoollogLanding';
-import AdmissionsWorkspace from './AdmissionsWorkspace';
-import TransportWorkspace from './TransportWorkspace';
+import { acceptInvitation, exportCsv, login, loginWithGoogle, linkGoogleAccount, logout, request, restoreSession, sendFirebasePasswordReset, type School, type User, type GoogleAuthResult } from './api';
+const AttendanceWorkspace = lazy(() => import('./AttendanceWorkspace'));
+const HomeworkWorkspace = lazy(() => import('./HomeworkWorkspace'));
+const ExamsWorkspace = lazy(() => import('./ExamsWorkspace'));
+const TimetableWorkspace = lazy(() => import('./TimetableWorkspace'));
+const FeesWorkspace = lazy(() => import('./FeesWorkspace'));
+const AnnouncementsWorkspace = lazy(() => import('./AnnouncementsWorkspace'));
+const ReportsWorkspace = lazy(() => import('./ReportsWorkspace'));
+const SettingsWorkspace = lazy(() => import('./SettingsWorkspace'));
+const NotificationBell = lazy(() => import('./NotificationBell'));
+import EduConnectLanding from './EduConnectLanding';
+import EduConnectBrand from './EduConnectBrand';
+import { useFirebaseAuth } from './auth/firebase';
+import { firebaseConfigured, firebaseConfigurationError } from './auth/firebase';
+import StudentDocuments from './StudentDocuments';
+const AdmissionsWorkspace = lazy(() => import('./AdmissionsWorkspace'));
+const TransportWorkspace = lazy(() => import('./TransportWorkspace'));
 
 type Overview={schools:{total_schools:number;active_schools:number;suspended_schools:number;pending_schools:number};total_users:number;total_students:number;total_teachers:number;total_parents:number;growth:{month:string;schools:number}[]};
 type Plans={items:{id:string;name:string;billing_interval:string;price_minor:number|null;currency:string}[]};
@@ -27,51 +31,72 @@ const dateLabel=(value:string)=>new Intl.DateTimeFormat('en-IN',{day:'2-digit',m
 const money=(minor:number|null,currency='INR')=>minor===null?'Configured per contract':new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(minor/100);
 
 export default function App(){
+  const location=useLocation();
+  const firebaseState=useFirebaseAuth();
   const [user,setUser]=useState<User|null>(null),[ready,setReady]=useState(false);
   const [view, setView] = useState<'landing' | 'portal' | 'admissions' | 'transport'>('landing');
   const [demoOpen, setDemoOpen] = useState(false);
 
-  useEffect(()=>{restoreSession().then(async ok=>{if(ok){try{const me=await request<{user:User}>('/api/auth/me');setUser(me.user);}catch{await logout();}}setReady(true);});},[]);
+  useEffect(()=>{
+    const path=location.pathname;
+    const page=path==='/accept-invitation'?'Accept invitation'
+      :path==='/recover-account'?'Account recovery'
+      :path==='/schools'?'Schools'
+      :path==='/activity'?'Activity log'
+      :path==='/team'?'Support team'
+      :view==='admissions'?'Admissions preview'
+      :view==='transport'?'Transport preview'
+      :user?.role==='super_admin'?'Platform administration'
+      :user?.role==='support_agent'?'Support workspace'
+      :user?'School workspace'
+      :view==='portal'?'Sign in'
+      :'School management';
+    document.title=`${page} | EduConnect`;
+  },[location.pathname,view,user?.role]);
+
+  useEffect(()=>{if(firebaseState.configured&&!firebaseState.ready)return;restoreSession().then(async ok=>{if(ok){try{const me=await request<{user:User}>('/api/auth/me');setUser(me.user);}catch{await logout();}}setReady(true);});},[firebaseState.configured,firebaseState.ready]);
   if(window.location.pathname==='/accept-invitation')return <InvitationPage/>;
   if(window.location.pathname==='/recover-account')return <RecoveryPage/>;
   if(!ready)return <div className="grid min-h-screen place-items-center text-sm text-muted">Opening your workspace…</div>;
 
   if (user) {
-    return user.role==='super_admin' ? (
-      <ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>
-    ) : user.role==='support_agent' ? (
-      <SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>
-    ) : (
-      <SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>
-    );
+    return <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening your workspace…</div>}>
+      {user.role==='super_admin' ? (
+        <ControlPanel user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+      ) : user.role==='support_agent' ? (
+        <SupportConsole user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+      ) : (
+        <SchoolWorkspace user={user} onLogout={async()=>{await logout();setUser(null);}}/>
+      )}
+    </Suspense>;
   }
 
-  // Schoollog Public Experience & Portal Router
+  // EduConnect public experience and portal router
   if (view === 'admissions') {
     return (
-      <div>
+      <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Admissions…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Admissions CRM // Public Preview</div>
-          <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
+          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>EduConnect Admissions // Simulation with sample data</div>
+          <button onClick={() => setView('landing')} className="edu-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
             ← Back to Home
           </button>
         </div>
         <AdmissionsWorkspace />
-      </div>
+      </div></Suspense>
     );
   }
 
   if (view === 'transport') {
     return (
-      <div>
+      <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Transport…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>Schoollog Bus GPS Fleet // Live Preview</div>
-          <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
+          <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>EduConnect Transport // Simulation with sample data; GPS is not connected</div>
+          <button onClick={() => setView('landing')} className="edu-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
             ← Back to Home
           </button>
         </div>
         <TransportWorkspace />
-      </div>
+      </div></Suspense>
     );
   }
 
@@ -79,9 +104,9 @@ export default function App(){
     return (
       <div>
         <div style={{ background: '#09131f', padding: '10px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '13px' }}>erp.schoollog.in // Unified Institution Login</div>
+          <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '13px' }}>EduConnect // School workspace sign in</div>
           <button onClick={() => setView('landing')} style={{ background: 'transparent', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '12px' }}>
-            ← Return to Schoollog Home
+            ← Return to EduConnect Home
           </button>
         </div>
         <AuthPortal onLogin={setUser}/>
@@ -91,7 +116,7 @@ export default function App(){
 
   return (
     <>
-      <SchoollogLanding
+      <EduConnectLanding
         onOpenDemo={() => setDemoOpen(true)}
         onGoToLogin={() => setView('portal')}
         onExploreModule={(mod) => {
@@ -101,13 +126,13 @@ export default function App(){
         }}
       />
       {demoOpen && (
-        <SchoollogDemoModal onClose={() => setDemoOpen(false)} />
+        <EduConnectContactModal onClose={() => setDemoOpen(false)} />
       )}
     </>
   );
 }
 
-function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
+function EduConnectContactModal({ onClose }: { onClose: () => void }) {
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -124,14 +149,12 @@ function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="sl-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sl-modal-card">
+    <div className="edu-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="edu-modal-card">
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="sl-brand-mark" style={{ width: '28px', height: '28px' }}>
-              <GraduationCap size={16} />
-            </div>
-            <strong style={{ fontSize: '16px', color: '#0f172a' }}>Book a Live Schoollog Demo</strong>
+            <img className="brand-mark contact-brand-mark" src="/brand/educonnect-mark.svg" alt="" aria-hidden="true" />
+            <strong style={{ fontSize: '16px', color: '#0f172a' }}>Contact CalmStacks about EduConnect</strong>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
             <X size={18} />
@@ -143,11 +166,11 @@ function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
             <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
               <Check size={28} />
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Demo Request Received!</h3>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px', color: '#0f172a' }}>Walkthrough request draft</h3>
             <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px' }}>
-              Our institutional solution consultant will connect with <strong>{form.name}</strong> at <strong>{form.phone}</strong> to walk through Schoollog tailored for <strong>{form.schoolName}</strong>.
+              This preview does not send or retain requests. Use your approved CalmStacks contact channel to arrange an EduConnect walkthrough for <strong>{form.schoolName}</strong>.
             </p>
-            <button onClick={onClose} className="sl-btn-primary" style={{ width: '100%' }}>
+            <button onClick={onClose} className="edu-btn-primary" style={{ width: '100%' }}>
               Done
             </button>
           </div>
@@ -212,8 +235,8 @@ function SchoollogDemoModal({ onClose }: { onClose: () => void }) {
                 <option value="2500+ Students (School Chain)">2500+ Students (School Chain)</option>
               </select>
             </div>
-            <button type="submit" className="sl-btn-primary" style={{ width: '100%', marginTop: '6px', borderRadius: '8px' }}>
-              Confirm &amp; Request Demo Call
+            <button type="submit" className="edu-btn-primary" style={{ width: '100%', marginTop: '6px', borderRadius: '8px' }}>
+              Save walkthrough draft
             </button>
           </form>
         )}
@@ -294,7 +317,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         setGoogleOpen(false);
         setLinkingPassword('');
         setLinkingError('');
-        setLinkingState({ email: result.email, name: result.name, token });
+        setLinkingState({ email: result.email, name: result.name, token: result.firebaseCredential??token });
       } else if (result.type === 'requireSchoolSelection') {
         setGoogleOpen(false);
         setMultiSchoolState({ token, schools: result.schools });
@@ -321,6 +344,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
       const res = await linkGoogleAccount({
         credential: linkingState.token,
         password: linkingPassword,
+        schoolId:loginSchoolId||undefined,
       });
       if (res.user) {
         localStorage.setItem('educonnect_has_account', 'true');
@@ -353,59 +377,32 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
 
   async function handleGoogleClick() {
     setError('');
-
-    // Google Identity Services (GSI)
-    const googleGSI = (window as any).google?.accounts?.id;
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (googleGSI && clientId) {
-      try {
-        googleGSI.initialize({
-          client_id: clientId,
-          callback: (resp: any) => {
-            if (resp?.credential) {
-              void executeGoogleToken(resp.credential);
-            }
-          },
-        });
-        googleGSI.prompt();
-        return;
-      } catch (e) {
-        console.warn('[Google GSI] prompt fallback:', e);
-      }
-    }
-
-    // When GSI is not loaded or configured, notify user
-    setError('Google Sign-In is initializing or requires VITE_GOOGLE_CLIENT_ID to be configured. Please sign in with email and password.');
+    if(!firebaseConfigured){setError(firebaseConfigurationError);return;}
+    await executeGoogleToken('firebase');
   }
 
   return (
     <main className="login-wrap">
       <section className="login-art">
-        <div className="brand inverse">
-          <div className="brand-mark"><GraduationCap size={21} /></div>
-          <span>calmstacks<span className="brand-light"> educonnect</span></span>
-        </div>
+        <EduConnectBrand inverse />
         <div className="art-copy">
           <div className="eyebrow-light"><span className="eyebrow-dot" /> MODERN SCHOOL PLATFORM</div>
           <h1 style={{ whiteSpace: 'pre-line' }}>{mode === 'register' ? 'Launch your school\nin seconds.' : 'Good schools\ngrow together.'}</h1>
-          <p>{mode === 'register' ? 'Set up an institutional workspace with automated grading, fees, student tracking, and parent circulars.' : 'A quieter, clearer way to manage every classroom, teacher, and student.'}</p>
+          <p>{mode === 'register' ? 'Set up an institutional workspace for student records, attendance, assignments, examinations, and fee accounts.' : 'A clear workspace for school teams, families, and students.'}</p>
           <div className="art-mini">
-            <div className="mini-avatar-row"><i>SC</i><i>AD</i><i>MK</i><i>+8</i></div>
-            <span>Trusted by forward-looking schools</span>
+            <ShieldCheck size={16}/>
+            <span>School access follows your assigned role and membership.</span>
           </div>
         </div>
         <div className="art-footer">
-          <span>CALMSTACKS / EDUCATION</span>
+          <span>Powered by CalmStacks</span>
           <span>01 — 05</span>
         </div>
       </section>
 
       <section className="login-panel">
         <div className="login-form-wrap">
-          <div className="mobile-brand brand">
-            <div className="brand-mark"><GraduationCap size={20} /></div>
-            <span>calmstacks <b>educonnect</b></span>
-          </div>
+          <EduConnectBrand compact className="mobile-brand" />
 
           <div className="auth-mode-toggle">
             <button
@@ -601,10 +598,10 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         </div>
 
         <div className="login-bottom">
-          <span>© 2026 CalmStacks</span>
-          <a href="mailto:support@calmstacks.example" className="quiet-link">
-            <CircleHelp size={14} /> Need help? Contact support
-          </a>
+          <span>© 2026 EduConnect</span>
+          <span className="quiet-link">
+            <CircleHelp size={14} /> Need help? Contact your school administrator
+          </span>
         </div>
       </section>
 
@@ -759,7 +756,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
 function InvitationPage(){
   const token=new URLSearchParams(window.location.search).get('token')||'';const [name,setName]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[accepted,setAccepted]=useState<{name:string;schoolId:string}|null>(null);
   async function submit(e:React.FormEvent){e.preventDefault();setError('');if(password.length<12){setError('Choose a password with at least 12 characters.');return;}if(password!==confirm){setError('The passwords do not match.');return;}setBusy(true);try{const user=await acceptInvitation(token,name,password);setAccepted({name:user.name,schoolId:user.schoolId});}catch(ex){setError((ex as Error).message);}finally{setBusy(false);}}
-  return <main className="invite-page"><div className="invite-card"><div className="brand"><div className="brand-mark"><GraduationCap size={20}/></div><span>calmstacks <b>educonnect</b></span></div>{accepted?<><div className="success-icon invite-success"><Check size={22}/></div><div className="eyebrow">INVITATION ACCEPTED</div><h1>Your school workspace is ready.</h1><p>Welcome, {accepted.name}. Your administrator account for <b>{accepted.schoolId}</b> is active.</p><a className="btn btn-primary btn-wide invite-link" href="/">Open school workspace <ChevronRight size={16}/></a></>:<><div className="eyebrow invite-eyebrow">SCHOOL ADMINISTRATOR SETUP</div><h1>Accept your invitation</h1><p>Set up your account to open the school workspace.</p>{!token?<div className="error-banner">This invitation link is missing its token. Ask the CalmStacks team to send you a fresh invitation.</div>:<form className="form-stack" onSubmit={submit}><label>Your name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" autoComplete="name" required/></label><label>Create a password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" minLength={12} required/><small className="subtle">Use at least 12 characters.</small></label><label>Confirm password<input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" required/></label>{error&&<div className="error-banner">{error}</div>}<button className="btn btn-primary btn-wide" disabled={busy}>{busy?'Setting up…':'Set up administrator account'}<ChevronRight size={16}/></button></form>}<div className="login-note"><ShieldCheck size={15}/> Secure invitation · one time use</div></>}</div></main>;
+  return <main className="invite-page"><div className="invite-card"><EduConnectBrand className="invite-brand" />{accepted?<><div className="success-icon invite-success"><Check size={22}/></div><div className="eyebrow">INVITATION ACCEPTED</div><h1>Your school workspace is ready.</h1><p>Welcome, {accepted.name}. Your administrator account for <b>{accepted.schoolId}</b> is active.</p><a className="btn btn-primary btn-wide invite-link" href="/">Open school workspace <ChevronRight size={16}/></a></>:<><div className="eyebrow invite-eyebrow">SCHOOL ADMINISTRATOR SETUP</div><h1>Accept your invitation</h1><p>Set up your account to open the school workspace.</p>{!token?<div className="error-banner">This invitation link is missing its token. Ask the CalmStacks team to send you a fresh invitation.</div>:<form className="form-stack" onSubmit={submit}><label>Your name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" autoComplete="name" required/></label><label>Create a password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" minLength={12} required/><small className="subtle">Use at least 12 characters.</small></label><label>Confirm password<input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" required/></label>{error&&<div className="error-banner">{error}</div>}<button className="btn btn-primary btn-wide" disabled={busy}>{busy?'Setting up…':'Set up administrator account'}<ChevronRight size={16}/></button></form>}<div className="login-note"><ShieldCheck size={15}/> Secure invitation · one time use</div></>}</div></main>;
 }
 
 function RecoveryPage(){
@@ -789,6 +786,9 @@ function RecoveryPage(){
         setMessage('Password updated successfully. You can sign in with your new password now.');
         setSuccessComplete(true);
         setPassword('');
+      }else if(firebaseConfigured){
+        await sendFirebasePasswordReset(email);
+        setMessage('If the account can sign in with Firebase, password reset instructions have been sent.');
       }else{
         const result=await request<{success?:boolean;message:string;schoolId?:string;schoolName?:string;developmentUrl?:string;invitationUrl?:string;notFound?:boolean}>('/api/auth/recovery/request',{
           method:'POST',
@@ -827,7 +827,7 @@ function RecoveryPage(){
   }
 
   return <main className="invite-page"><section className="invite-card">
-    <div className="brand"><div className="brand-mark"><ShieldCheck size={19}/></div><span>calmstacks <b>educonnect</b></span></div>
+    <EduConnectBrand className="recovery-brand" />
     <div className="eyebrow invite-eyebrow">ACCOUNT SECURITY</div>
     <h1>{token?'Choose a new password':'Recover your account'}</h1>
     <p>{token?'Enter your new secure password below (minimum 12 characters).':'We will send a one time recovery link if the account matches our records.'}</p>
@@ -1092,7 +1092,7 @@ function SchoolOverviewView({
               <GraduationCap size={16} /> <span>Student Directory & Records</span> <small>&rarr;</small>
             </div>
             <div className="module-link-row" onClick={() => onNavigate('transport')}>
-              <Clock3 size={16} /> <span>Transport & Live Bus GPS</span> <small>&rarr;</small>
+              <Clock3 size={16} /> <span>Transport preview</span> <small>&rarr;</small>
             </div>
             <div className="module-link-row" onClick={() => onNavigate('exams')}>
               <Award size={16} /> <span>Exams & Report Cards</span> <small>&rarr;</small>
@@ -1121,7 +1121,7 @@ function SchoolOverviewView({
             <div className="security-status-item">
               <Check size={18} style={{ color: '#16a34a', flexShrink: 0 }} />
               <div>
-                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Academic Year: {academicYear || '2026-2027'}</strong>
+                <strong style={{ fontSize: '12px', color: '#1e293b' }}>Academic Year: {academicYear || 'Not configured'}</strong>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>Active enrollment and grading period</div>
               </div>
             </div>
@@ -1195,7 +1195,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       case 'homework': return 'Homework';
       case 'exams': return 'Exams & Results';
       case 'timetable': return 'Timetable';
-      case 'transport': return 'Transport GPS';
+      case 'transport': return 'Transport';
       case 'fees': return 'Fees & Payments';
       case 'announcements': return 'Announcements';
       case 'reports': return 'Reports';
@@ -1231,7 +1231,33 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
     return matched.slice(0, 4);
   }, [tabs]);
 
-  return <main className="school-app">
+  const navigationGroups = [
+    { label: 'Workspace', items: tabs.filter(item => ['overview', 'admissions', 'students'].includes(item)) },
+    { label: 'Learning', items: tabs.filter(item => ['classes', 'attendance', 'homework', 'exams', 'timetable'].includes(item)) },
+    { label: 'Operations', items: tabs.filter(item => ['transport', 'fees', 'announcements', 'reports', 'settings', 'access'].includes(item)) },
+  ].filter(group => group.items.length > 0);
+
+  return <div className="school-app school-shell">
+    <aside className="school-sidebar" aria-label="School workspace navigation">
+      <EduConnectBrand compact className="school-sidebar-brand" />
+      <div className="school-identity">
+        <span className="school-identity-mark"><Building2 size={16}/></span>
+        <span><strong>School workspace</strong><small>{user.schoolId || 'Current school'}</small></span>
+      </div>
+      {q.data?.currentAcademicYear&&<div className="school-year"><span>Academic year</span><strong>{q.data.currentAcademicYear.name}</strong></div>}
+      <nav className="school-sidebar-nav" aria-label="School modules">
+        {navigationGroups.map(group=><div className="school-nav-group" key={group.label}>
+          <span className="school-nav-group-label">{group.label}</span>
+          {group.items.map(item=>{const Icon=getTabIcon(item);return <button type="button" key={item} aria-current={tab===item?'page':undefined} className={`school-side-link ${tab===item?'active':''}`} onClick={()=>setTab(item)}><Icon size={17}/><span>{getTabLabel(item)}</span></button>;})}
+        </div>)}
+      </nav>
+      <div className="school-sidebar-profile">
+        <span className="school-user-avatar">{initials(user.name)}</span>
+        <span className="school-user-copy"><strong>{user.name}</strong><small>{user.schoolRoleName || user.schoolRole || user.role}</small></span>
+        <button type="button" className="school-signout" onClick={onLogout} aria-label="Sign out"><LogOut size={16}/></button>
+      </div>
+    </aside>
+    <div className="school-main">
     <header className="school-top">
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
         <button 
@@ -1242,13 +1268,8 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
         >
           <Menu size={20} />
         </button>
-        <div className="brand" style={{ minWidth: 0 }}>
-          <div className="brand-mark"><GraduationCap size={19}/></div>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            educonnect
-            <small className="mobile-hide-sub">SCHOOL WORKSPACE</small>
-          </span>
-        </div>
+        <EduConnectBrand compact className="school-top-brand" />
+        <div className="school-top-title"><span>School workspace</span><strong>{getTabLabel(tab)}</strong></div>
       </div>
       <div className="school-top-actions">
         <NotificationBell onOpenAnnouncements={() => { setTab('announcements'); setMobileMenuOpen(false); }} />
@@ -1265,13 +1286,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       <div className="mobile-drawer-overlay" onClick={() => setMobileMenuOpen(false)}>
         <aside className="mobile-drawer" onClick={(e) => e.stopPropagation()}>
           <div className="mobile-drawer-header">
-            <div className="brand">
-              <div className="brand-mark"><GraduationCap size={20}/></div>
-              <div>
-                <strong style={{ fontSize: '15px', color: '#17251f', display: 'block' }}>educonnect</strong>
-                <div style={{ fontSize: '10px', color: '#64748b' }}>School Workspace</div>
-              </div>
-            </div>
+            <EduConnectBrand compact />
             <button type="button" className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
               <X size={20} />
             </button>
@@ -1331,10 +1346,11 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       </div>
     )}
 
-    <section className="school-welcome">
-      <div className="eyebrow">SCHOOL WORKSPACE <span className="heading-dash">/</span> {(user.schoolRoleName||user.schoolRole||user.role).toUpperCase()}</div>
-      <h1>Welcome, {user.name.split(' ')[0]}.</h1>
-      <p>Your school overview is ready. School ID <b>{user.schoolId}</b>{q.data?.currentAcademicYear&&<> · Academic year {q.data.currentAcademicYear.name}</>}</p>
+    <main className="school-main-content">
+    <section className="school-context-bar" aria-label="Current school context">
+      <span className="school-role-chip">{user.schoolRoleName||user.schoolRole||user.role}</span>
+      <span>{user.schoolId || 'School workspace'}</span>
+      {q.data?.currentAcademicYear&&<span>Academic year <strong>{q.data.currentAcademicYear.name}</strong></span>}
     </section>
 
     {tabs.length>0&&<div className="school-workbar">
@@ -1370,7 +1386,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
         </>}
       </div>
     </div>}
-  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='admissions'?<AdmissionsWorkspace/>:tab==='transport'?<TransportWorkspace/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
+  {q.isError?<ErrorPanel message={(q.error as Error).message} retry={()=>q.refetch()}/>:tab==='admissions'?<AdmissionsWorkspace/>:tab==='transport'?<TransportWorkspace/>:tab==='attendance'?<AttendanceWorkspace user={user}/>:tab==='homework'?<HomeworkWorkspace user={user}/>:tab==='exams'?<ExamsWorkspace user={user}/>:tab==='timetable'?<TimetableWorkspace user={user}/>:tab==='fees'?<FeesWorkspace user={user}/>:tab==='announcements'?<AnnouncementsWorkspace user={user}/>:tab==='reports'?<ReportsWorkspace user={user}/>:tab==='settings'?<SettingsWorkspace user={user}/>:tab==='overview'?<SchoolOverviewView metrics={q.data?.metrics} user={user} academicYear={q.data?.currentAcademicYear?.name} onNavigate={setTab} onAdmitStudent={()=>setDialog('student')} onAddClass={()=>setDialog('class')}/>:tab==='access'?<SchoolAccessPanel user={user}/>:tab==='classes'?<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">ACADEMIC STRUCTURE</div><h3>Classes and sections</h3></div><span className="table-count">{classes.data?.items.length||0} classes</span></div>{!years.data?.items.length?<div className="empty-state"><div className="empty-icon"><GraduationCap size={19}/></div><strong>Set up your academic year</strong><span>Create the year first, then add classes.</span><button className="btn btn-primary" onClick={()=>setDialog('year')}><Plus size={15}/> Add academic year</button></div>:classes.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:classes.data?.items.length?<div className="simple-list">{classes.data.items.map(item=><div className="simple-row" key={item.id}><div className="school-logo"><GraduationCap size={16}/></div><div><strong>{item.name}</strong><small>{item.academic_year_name} · Grade {item.grade_level??'—'}</small></div><span>{item.students} students</span><span>{item.sections} sections</span></div>)}</div>:<div className="empty-state"><strong>No classes yet</strong><span>Add classes for {years.data.items[0].name}.</span><button className="btn btn-primary" onClick={()=>setDialog('class')}><Plus size={15}/> Add class</button></div>}</section>:<section className="panel school-data-panel"><div className="panel-head"><div><div className="panel-kicker">STUDENT RECORDS</div><h3>Students</h3></div><span className="table-count">{students.data?.total||0} records</span></div><div className="student-list-toolbar"><div className="search-box"><Search size={16}/><input value={studentSearch} onChange={e=>{setStudentSearch(e.target.value);setStudentPage(1);}} placeholder="Search student name or admission no."/></div><span className="table-count">{students.data?.total||0} records</span></div>{students.isError?<ErrorPanel message={(students.error as Error).message} retry={()=>students.refetch()}/>:students.isLoading?<div className="table-loading"><div className="table-skeleton"/><div className="table-skeleton"/></div>:students.data?.items.length?<div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>ADMISSION NO.</th><th>CLASS</th><th>ACADEMIC YEAR</th><th>STATUS</th><th>FILES</th></tr></thead><tbody>{students.data.items.map(st=><tr key={st.id}><td><div className="school-cell"><div className="school-logo">{initials(`${st.first_name} ${st.last_name}`)}</div><div><strong>{st.first_name} {st.last_name}</strong><small>{st.date_of_birth?`Born ${dateLabel(st.date_of_birth)}`:'Date of birth not set'}</small></div></div></td><td>{st.admission_number}</td><td>{st.class_name||'Not allocated'}{st.section_name?` · ${st.section_name}`:''}</td><td>{st.academic_year_name||'—'}</td><td><StatusBadge status={st.status}/></td><td><StudentDocuments studentId={st.id} studentName={st.first_name+' '+st.last_name}/></td></tr>)}</tbody></table></div>:<div className="empty-state"><div className="empty-icon"><Users size={19}/></div><strong>No students yet</strong><span>Admit a student to start building your school records.</span><button className="btn btn-primary" onClick={()=>setDialog('student')}><Plus size={15}/> Admit student</button></div>}<div className="school-page-footer"><span>Showing {students.data?.items.length||0} of {students.data?.total||0} students</span><div><button className="pager" disabled={studentPage<=1} onClick={()=>setStudentPage(n=>n-1)}><ChevronLeft size={15}/></button><span>Page {studentPage} of {Math.max(1,Math.ceil((students.data?.total||0)/20))}</span><button className="pager" disabled={studentPage>=Math.ceil((students.data?.total||0)/20)} onClick={()=>setStudentPage(n=>n+1)}><ChevronRight size={15}/></button></div></div></section>}
   {(bulkError||addYear.isError||addClass.isError||addStudent.isError||bulkImport.isError)&&<div className="error-inline school-error">{bulkError||((addYear.error||addClass.error||addStudent.error||bulkImport.error) as Error).message}</div>}{dialog&&<div className="modal-backdrop"><section className="modal school-modal"><div className="modal-head"><div><div className="eyebrow">SCHOOL SETUP</div><h2>{dialog==='year'?'Add academic year':dialog==='class'?'Add a class':'Admit a student'}</h2><p>Records are saved to this school workspace.</p></div><button className="icon-button" onClick={()=>setDialog(null)}><X size={19}/></button></div>{dialog==='year'?<YearForm pending={addYear.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addYear.mutate(v)}/>:dialog==='class'?<ClassForm years={years.data?.items||[]} pending={addClass.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addClass.mutate(v)}/>:<StudentForm years={years.data?.items||[]} classes={classes.data?.items||[]} pending={addStudent.isPending} onCancel={()=>setDialog(null)} onSubmit={v=>addStudent.mutate(v)}/>}</section></div>}
   {/* Mobile Bottom Navigation Bar */}
   <nav className="school-bottom-nav" aria-label="Quick Mobile Navigation">
@@ -1398,7 +1414,9 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       <span>Menu</span>
     </button>
   </nav>
-</main>;
+</main>
+    </div>
+  </div>;
 }
 
 function parseStudentCsv(text:string):Record<string,string>[]{
@@ -1445,16 +1463,16 @@ function ModalActions({pending,onCancel,submit,disabled}:{pending:boolean;onCanc
 function ControlPanel({user,onLogout}:{user:User;onLogout:()=>void}){
   const [mobileOpen,setMobileOpen]=useState(false),[createOpen,setCreateOpen]=useState(false),[settingsOpen,setSettingsOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false),[notifOpen,setNotifOpen]=useState(false);const location=useLocation();
   const routes=[{to:'/',label:'Overview',icon:LayoutDashboard},{to:'/schools',label:'Schools',icon:Building2,badge:undefined},{to:'/subscriptions',label:'Subscriptions',icon:CreditCard,disabled:true},{to:'/activity',label:'Activity log',icon:Activity},{to:'/team',label:'Support team',icon:Users}];
-  return <div className="app-shell"><aside className={`sidebar ${mobileOpen?'mobile-open':''}`}><div className="brand side-brand"><div className="brand-mark"><GraduationCap size={20}/></div><span>calmstacks<small>EDUCONNECT</small></span></div><div className="side-label">WORKSPACE</div><div className="workspace-switch"><div className="workspace-icon"><ShieldCheck size={17}/></div><div><strong>Platform admin</strong><small>CalmStacks network</small></div><ChevronDown size={15} className="ml-auto text-muted"/></div><div className="side-label nav-label">MANAGE</div><nav className="side-nav">{routes.map(item=><NavLink key={item.to} to={item.to} onClick={()=>setMobileOpen(false)} className={({isActive})=>`nav-item ${isActive&&item.to==='/'&&location.pathname!=='/'?'':' '}${isActive?'active':''} ${item.disabled?'disabled':''}`}><item.icon size={18}/><span>{item.label}</span>{item.badge&&<em>{item.badge}</em>}</NavLink>)}</nav><div className="side-bottom"><div className="plan-card"><div className="plan-top"><span className="plan-icon"><Sparkles size={15}/></span><span>PLATFORM STATUS</span><span className="live-dot"/></div><strong>All systems operational</strong><div className="plan-meter"><i/></div><div className="plan-foot"><span>Infrastructure</span><b>Healthy</b></div></div><button type="button" className="nav-item" onClick={()=>setSettingsOpen(true)}><Settings2 size={18}/><span>Settings</span></button><button type="button" className="nav-item" onClick={()=>setHelpOpen(true)}><CircleHelp size={18}/><span>Help & support</span></button><div className="profile-row"><div className="avatar">{initials(user.name)}</div><div className="profile-meta"><strong>{user.name}</strong><small>Super administrator</small></div><button onClick={onLogout} className="icon-button" title="Sign out"><LogOut size={17}/></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}><Menu size={19}/></button><div className="crumb"><span>CalmStacks</span><ChevronRight size={14}/><b>{location.pathname==='/schools'?'Schools':location.pathname==='/activity'?'Activity log':location.pathname==='/team'?'Support team':'Overview'}</b></div><div className="topbar-actions"><div className="top-date"><span className="date-dot"/> {today().toUpperCase()}</div><button type="button" className="icon-button notification" onClick={()=>setNotifOpen(true)} title="System notifications"><Bell size={18}/><i/></button><div className="top-avatar">{initials(user.name)}</div></div></header><main className="page-content"><Routes><Route path="/" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/schools" element={<SchoolsPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/activity" element={<ActivityPage/>}/><Route path="/team" element={<TeamPage/>}/><Route path="*" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/></Routes></main><footer className="main-footer"><span>CALMSTACKS EDUCONNECT <i>•</i> PLATFORM CONTROL</span><span>Secure workspace <ShieldCheck size={13}/></span></footer></div>
+  return <div className="app-shell"><aside className={`sidebar ${mobileOpen?'mobile-open':''}`}><EduConnectBrand className="side-brand" /><div className="side-label">WORKSPACE</div><div className="workspace-switch"><div className="workspace-icon"><ShieldCheck size={17}/></div><div><strong>Platform admin</strong><small>CalmStacks network</small></div><ChevronDown size={15} className="ml-auto text-muted"/></div><div className="side-label nav-label">MANAGE</div><nav className="side-nav">{routes.map(item=><NavLink key={item.to} to={item.to} onClick={()=>setMobileOpen(false)} className={({isActive})=>`nav-item ${isActive&&item.to==='/'&&location.pathname!=='/'?'':' '}${isActive?'active':''} ${item.disabled?'disabled':''}`}><item.icon size={18}/><span>{item.label}</span>{item.badge&&<em>{item.badge}</em>}</NavLink>)}</nav><div className="side-bottom"><div className="plan-card"><div className="plan-top"><span className="plan-icon"><Sparkles size={15}/></span><span>PLATFORM STATUS</span><span className="live-dot"/></div><strong>All systems operational</strong><div className="plan-meter"><i/></div><div className="plan-foot"><span>Infrastructure</span><b>Healthy</b></div></div><button type="button" className="nav-item" onClick={()=>setSettingsOpen(true)}><Settings2 size={18}/><span>Settings</span></button><button type="button" className="nav-item" onClick={()=>setHelpOpen(true)}><CircleHelp size={18}/><span>Help & support</span></button><div className="profile-row"><div className="avatar">{initials(user.name)}</div><div className="profile-meta"><strong>{user.name}</strong><small>Super administrator</small></div><button onClick={onLogout} className="icon-button" title="Sign out"><LogOut size={17}/></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}><Menu size={19}/></button><div className="crumb"><span>EduConnect</span><ChevronRight size={14}/><b>{location.pathname==='/schools'?'Schools':location.pathname==='/activity'?'Activity log':location.pathname==='/team'?'Support team':'Overview'}</b></div><div className="topbar-actions"><div className="top-date"><span className="date-dot"/> {today().toUpperCase()}</div><button type="button" className="icon-button notification" onClick={()=>setNotifOpen(true)} title="System notifications"><Bell size={18}/><i/></button><div className="top-avatar">{initials(user.name)}</div></div></header><main className="page-content"><Routes><Route path="/" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/schools" element={<SchoolsPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/activity" element={<ActivityPage/>}/><Route path="/team" element={<TeamPage/>}/><Route path="*" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/></Routes></main><footer className="main-footer"><span>EduConnect <i>•</i> Platform administration</span><span>Secure workspace <ShieldCheck size={13}/></span></footer></div>
     {createOpen&&<CreateSchoolModal onClose={()=>setCreateOpen(false)}/>}
     {settingsOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setSettingsOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">PLATFORM CONFIGURATION</div><h2>Platform Settings</h2><p>Core system parameters and tenant isolation controls.</p></div><button className="icon-button" onClick={()=>setSettingsOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'1rem',padding:'1rem 0'}}>
-      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Database Wire Server:</strong> PostgreSQL 16 (Wire Protocol on 127.0.0.1:5432)<div style={{fontSize:'0.75rem',color:'#64748b'}}>Embedded multi-tenant schema with Row-Level Security (RLS) enforcement.</div></div>
-      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Authentication Engine:</strong> Dual-Secret JWT + Refresh Cookie<div style={{fontSize:'0.75rem',color:'#64748b'}}>Tokens scoped to tenant context; zero tenant disclosure on cross-school queries.</div></div>
-      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Session TTL:</strong> Access tokens: 15 minutes · Refresh sessions: 7 days<div style={{fontSize:'0.75rem',color:'#64748b'}}>Recovery & invitation hashes expire after 30 minutes / 72 hours.</div></div>
+      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Database engine:</strong> PostgreSQL<div style={{fontSize:'0.75rem',color:'#64748b'}}>Embedded multi-tenant schema with Row-Level Security (RLS) enforcement.</div></div>
+      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Authentication provider:</strong> Firebase Authentication<div style={{fontSize:'0.75rem',color:'#64748b'}}>Accounts resolve through linked EduConnect memberships and assigned permissions.</div></div>
+      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Account security:</strong> Invitation and recovery links<div style={{fontSize:'0.75rem',color:'#64748b'}}>Single-use links expire automatically.</div></div>
     </div><div className="modal-actions"><span/><button type="button" className="btn btn-primary" onClick={()=>setSettingsOpen(false)}>Done</button></div></section></div>}
-    {helpOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setHelpOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">ASSISTANCE & DOCUMENTATION</div><h2>Help & Support</h2><p>CalmStacks EduConnect administration guidelines.</p></div><button className="icon-button" onClick={()=>setHelpOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'1rem',padding:'1rem 0'}}>
-      <p style={{fontSize:'0.85rem',color:'#475569',lineHeight:1.6}}>CalmStacks EduConnect is a high-assurance multi-tenant education platform designed with strict per-tenant data boundaries, automated offline billing ledgers, attendance marking, and grade publishing.</p>
-      <div style={{padding:'0.85rem',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'8px'}}><strong style={{color:'#166534'}}>Technical Support Hotline:</strong><div style={{fontSize:'0.8rem',color:'#15803d',marginTop:'0.25rem'}}>Email: support@calmstacks.example · Mon–Fri, 9am–6pm IST</div></div>
+    {helpOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setHelpOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">ASSISTANCE & DOCUMENTATION</div><h2>Help & Support</h2><p>EduConnect administration guidelines. Powered by CalmStacks.</p></div><button className="icon-button" onClick={()=>setHelpOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'1rem',padding:'1rem 0'}}>
+      <p style={{fontSize:'0.85rem',color:'#475569',lineHeight:1.6}}>EduConnect is a multi-tenant education platform with school-scoped access controls, attendance, fees, and academic workflows.</p>
+      <div style={{padding:'0.85rem',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'8px'}}><strong style={{color:'#166534'}}>Technical Support Hotline:</strong><div style={{fontSize:'0.8rem',color:'#15803d',marginTop:'0.25rem'}}>Support is available through your approved CalmStacks contact channel.</div></div>
     </div><div className="modal-actions"><span/><button type="button" className="btn btn-primary" onClick={()=>setHelpOpen(false)}>Close</button></div></section></div>}
     {notifOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setNotifOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">SYSTEM BROADCASTS</div><h2>Platform Notifications</h2><p>Infrastructure alerts and platform-wide events.</p></div><button className="icon-button" onClick={()=>setNotifOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'0.75rem',padding:'1rem 0'}}>
       <div style={{padding:'0.75rem 1rem',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'8px'}}><div style={{fontWeight:600,fontSize:'0.85rem',color:'#0f172a'}}>PostgreSQL Wire Engine Healthy</div><div style={{fontSize:'0.75rem',color:'#64748b'}}>Connection pool active with 0 hung clients. Migrations 001–008 applied.</div></div>
@@ -1477,7 +1495,7 @@ function SupportConsole({user,onLogout}:{user:User;onLogout:()=>void}){
   const create=useMutation({mutationFn:()=>request('/api/platform/support-access',{method:'POST',body:JSON.stringify({schoolId,reason,durationMinutes,scopes})}),onSuccess:()=>{setReason('');void qc.invalidateQueries({queryKey:['support-cases']});}});
   async function viewStudents(item:SupportCase){setError('');try{const data=await request<{items:Record<string,unknown>[];total:number}>(`/api/platform/support-access/${item.id}/students`);setPreview(data.items);}catch(ex){setError((ex as Error).message);}}
   const choices=['students:read','fees:read','announcements:read','messages:read'];
-  return <main className="school-app"><header className="school-top"><div className="brand"><div className="brand-mark"><ShieldCheck size={18}/></div><span>calmstacks<small>TECHNICAL SUPPORT</small></span></div><div className="school-top-actions"><div className="top-avatar">{initials(user.name)}</div><button className="btn btn-secondary small-btn" onClick={onLogout}><LogOut size={14}/> Sign out</button></div></header><section className="school-welcome"><div className="eyebrow">PLATFORM SUPPORT</div><h1>Support workspace.</h1><p>Ask a school administrator to approve the minimum data scope needed for a time‑limited investigation.</p></section><div className="team-grid"><section className="panel"><div className="panel-kicker">REQUEST SCHOOL ACCESS</div><h3>New support request</h3><form className="team-create" onSubmit={async e=>{e.preventDefault();setError('');try{await create.mutateAsync();}catch(ex){setError((ex as Error).message);}}}><label>School ID<input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0001" required/></label><label>Reason<textarea value={reason} onChange={e=>setReason(e.target.value)} minLength={12} maxLength={1000} required placeholder="Describe the technical issue and why access is needed."/></label><fieldset><legend>Requested data scopes</legend>{choices.map(scope=><label className="scope-check" key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={e=>setScopes(e.target.checked?[...scopes,scope]:scopes.filter(item=>item!==scope))}/>{scope}</label>)}</fieldset><label>Access window<select value={durationMinutes} onChange={e=>setDuration(Number(e.target.value))}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>1 hour</option><option value={120}>2 hours</option></select></label>{(error||create.isError)&&<div className="error-banner">{error||(create.error as Error).message}</div>}<button className="btn btn-primary" disabled={create.isPending||!scopes.length}>{create.isPending?'Submitting…':'Send to school administrator'}</button></form></section><section className="panel"><div className="panel-head"><div><div className="panel-kicker">AUDITABLE ACCESS</div><h3>Your support requests</h3></div></div>{cases.isLoading?<div className="table-loading"><div className="table-skeleton"/></div>:cases.data?.items.map(item=><div className="support-request" key={item.id}><div><strong>{item.school_name} · {item.status}</strong><small>{item.reason}</small><small>Requested {item.requested_scopes.join(', ')} · {new Date(item.requested_expires_at).toLocaleString()}</small>{item.approved_scopes.length>0&&<small>Approved {item.approved_scopes.join(', ')} · expires {item.expires_at?new Date(item.expires_at).toLocaleString():'—'}</small>}</div>{item.status==='approved'&&item.approved_scopes.includes('students:read')&&item.expires_at&&new Date(item.expires_at)>new Date()&&<button className="btn btn-secondary small-btn" onClick={()=>viewStudents(item)}>View authorized student list</button>}</div>)}</section></div>{error&&<div className="error-inline school-error">{error}</div>}{preview.length>0&&<section className="panel support-preview"><div className="panel-kicker">LIMITED SUPPORT VIEW</div><h3>Authorized student records</h3>{preview.map(row=><div key={String(row.id)} className="access-member"><strong>{String(row.first_name)} {String(row.last_name)}</strong><small>{String(row.admission_number)} · {String(row.status)}</small></div>)}</section>}</main>;
+  return <main className="school-app"><header className="school-top"><EduConnectBrand compact /><div className="school-top-actions"><div className="top-avatar">{initials(user.name)}</div><button className="btn btn-secondary small-btn" onClick={onLogout}><LogOut size={14}/> Sign out</button></div></header><section className="school-welcome"><div className="eyebrow">PLATFORM SUPPORT</div><h1>Support workspace.</h1><p>Ask a school administrator to approve the minimum data scope needed for a time‑limited investigation.</p></section><div className="team-grid"><section className="panel"><div className="panel-kicker">REQUEST SCHOOL ACCESS</div><h3>New support request</h3><form className="team-create" onSubmit={async e=>{e.preventDefault();setError('');try{await create.mutateAsync();}catch(ex){setError((ex as Error).message);}}}><label>School ID<input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0001" required/></label><label>Reason<textarea value={reason} onChange={e=>setReason(e.target.value)} minLength={12} maxLength={1000} required placeholder="Describe the technical issue and why access is needed."/></label><fieldset><legend>Requested data scopes</legend>{choices.map(scope=><label className="scope-check" key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={e=>setScopes(e.target.checked?[...scopes,scope]:scopes.filter(item=>item!==scope))}/>{scope}</label>)}</fieldset><label>Access window<select value={durationMinutes} onChange={e=>setDuration(Number(e.target.value))}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>1 hour</option><option value={120}>2 hours</option></select></label>{(error||create.isError)&&<div className="error-banner">{error||(create.error as Error).message}</div>}<button className="btn btn-primary" disabled={create.isPending||!scopes.length}>{create.isPending?'Submitting…':'Send to school administrator'}</button></form></section><section className="panel"><div className="panel-head"><div><div className="panel-kicker">AUDITABLE ACCESS</div><h3>Your support requests</h3></div></div>{cases.isLoading?<div className="table-loading"><div className="table-skeleton"/></div>:cases.data?.items.map(item=><div className="support-request" key={item.id}><div><strong>{item.school_name} · {item.status}</strong><small>{item.reason}</small><small>Requested {item.requested_scopes.join(', ')} · {new Date(item.requested_expires_at).toLocaleString()}</small>{item.approved_scopes.length>0&&<small>Approved {item.approved_scopes.join(', ')} · expires {item.expires_at?new Date(item.expires_at).toLocaleString():'—'}</small>}</div>{item.status==='approved'&&item.approved_scopes.includes('students:read')&&item.expires_at&&new Date(item.expires_at)>new Date()&&<button className="btn btn-secondary small-btn" onClick={()=>viewStudents(item)}>View authorized student list</button>}</div>)}</section></div>{error&&<div className="error-inline school-error">{error}</div>}{preview.length>0&&<section className="panel support-preview"><div className="panel-kicker">LIMITED SUPPORT VIEW</div><h3>Authorized student records</h3>{preview.map(row=><div key={String(row.id)} className="access-member"><strong>{String(row.first_name)} {String(row.last_name)}</strong><small>{String(row.admission_number)} · {String(row.status)}</small></div>)}</section>}</main>;
 }
 
 function OverviewPage({onCreate}:{onCreate:()=>void}){

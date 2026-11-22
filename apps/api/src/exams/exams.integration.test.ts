@@ -12,8 +12,9 @@ process.env.REFRESH_TOKEN_SECRET='different-local-test-refresh-secret-long-enoug
 
 test('examination marks, publication, rankings, linked/self scopes and school isolation use PostgreSQL',async()=>{
   const db=await PGlite.create(),migrationDir=new URL('../../migrations/',import.meta.url);
+    await db.exec('CREATE ROLE educonnect_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;');
   for(const name of (await readdir(migrationDir)).filter(n=>n.endsWith('.sql')).sort()){let sql=await readFile(new URL(name,migrationDir),'utf8');sql=sql.replace(/CREATE EXTENSION IF NOT EXISTS pgcrypto;\s*/,'');await db.exec(sql);}
-  await db.exec('CREATE ROLE educonnect_app LOGIN NOBYPASSRLS; CREATE ROLE educonnect_platform LOGIN BYPASSRLS; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;');
+  await db.exec('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO educonnect_app,educonnect_platform; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO educonnect_app,educonnect_platform;');
   const socket=new PGLiteSocketServer({db,host:'127.0.0.1',port:0,maxConnections:16});await socket.start();const port=Number(socket.getServerConn().split(':').at(-1));
   process.env.DATABASE_URL=`postgresql://educonnect_app@127.0.0.1:${port}/postgres?sslmode=disable`;process.env.PLATFORM_DATABASE_URL=`postgresql://educonnect_platform@127.0.0.1:${port}/postgres?sslmode=disable`;process.env.MIGRATION_DATABASE_URL=process.env.PLATFORM_DATABASE_URL;
   const [{pool,platformPool,tenantTransaction},{signAccess},{examRouter}]=await Promise.all([import('../db/pool.js'),import('../auth/tokens.js'),import('./routes.js')]);pool.on('acquire',c=>{void c.query('SET ROLE educonnect_app');});platformPool.on('acquire',c=>{void c.query('SET ROLE educonnect_platform');});
