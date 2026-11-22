@@ -47,15 +47,22 @@ test('production config refuses implicit database and signing secrets',()=>{
   }),/ACCESS_TOKEN_SECRET must be explicitly configured/);
   assert.throws(()=>validateProductionEnvironment({
     NODE_ENV:'production',
+    AUTH_PROVIDER:'firebase',
     DATABASE_URL:'postgresql://app:secret@db.example.test/app',
     ACCESS_TOKEN_SECRET:'a'.repeat(40),
     REFRESH_TOKEN_SECRET:'b'.repeat(40)
   }),/FIREBASE_SERVICE_ACCOUNT_JSON must be configured/);
   const validProductionEnvironment={
     NODE_ENV:'production',
-    DATABASE_URL:'postgresql://app:secret@db.example.test/app',
+    AUTH_PROVIDER:'firebase',
+    DATABASE_URL:'postgresql://educonnect_app@aws-0-jnhcomdjezlvmxpjkoot.pooler.supabase.com:6543/postgres',
+    PLATFORM_DATABASE_URL:'postgresql://educonnect_platform@aws-0-jnhcomdjezlvmxpjkoot.pooler.supabase.com:6543/postgres',
+    DATABASE_SSL_CA_CERT:'test-ca-certificate',
     ACCESS_TOKEN_SECRET:'a'.repeat(40),
     REFRESH_TOKEN_SECRET:'b'.repeat(40),
+    WEB_ORIGIN:'https://educonnect.vercel.app',
+    INVITATION_BASE_URL:'https://educonnect.vercel.app/accept-invitation',
+    RECOVERY_BASE_URL:'https://educonnect.vercel.app/recover-account',
     FIREBASE_PROJECT_ID:'educonnect-44f2b',
     SUPABASE_URL:'https://jnhcomdjezlvmxpjkoot.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY:'server-only-test-key',
@@ -63,4 +70,6 @@ test('production config refuses implicit database and signing secrets',()=>{
   };
   assert.doesNotThrow(()=>validateProductionEnvironment(validProductionEnvironment));
   assert.throws(()=>validateProductionEnvironment({...validProductionEnvironment,SUPABASE_URL:'https://jnhcomdjezlvmxpjkoot.supabase.co.attacker.invalid'}),/dedicated EduConnect project/);
+  assert.throws(()=>validateProductionEnvironment({...validProductionEnvironment,WEB_ORIGIN:'http://localhost:5173'}),/local or legacy Schoollog domain/);
+  assert.throws(()=>validateProductionEnvironment({...validProductionEnvironment,WEB_ORIGIN:'https://school-dashboard-nine-rho.vercel.app',INVITATION_BASE_URL:'https://school-dashboard-nine-rho.vercel.app/invite',RECOVERY_BASE_URL:'https://school-dashboard-nine-rho.vercel.app/recover'}),/legacy Schoollog domain/);
 });

@@ -21,9 +21,9 @@ import { storageRouter } from './storage/routes.js';
 import { HttpError } from './http.js';
 import { pool, platformPool, verifyRuntimeDatabaseRoles } from './db/pool.js';
 import { configureProxyTrust } from './proxy.js';
-
-const APPROVED_PREVIEW_PATTERN = /^https:\/\/[a-z0-9-]+-arilsrinivas-projects\.vercel\.app$/;
-const APPROVED_PROD_DOMAIN = 'https://school-dashboard-nine-rho.vercel.app';
+import { initializeFirebaseAdmin } from './auth/firebase-admin.js';
+import { bucketForPurpose, storageClient } from './storage/supabase.js';
+import { isAllowedCorsOrigin } from './cors.js';
 
 export const app=express();
 // Vercel's edge overwrites X-Forwarded-For before forwarding to the function.
@@ -35,20 +35,11 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests without origin (same-origin, mobile apps, serverless internal)
     if (!origin) return callback(null, true);
-    // Exact match for configured WEB_ORIGIN
-    if (origin === env.WEB_ORIGIN) return callback(null, true);
-    // Exact match for verified production deployment domain
-    if (origin === APPROVED_PROD_DOMAIN) return callback(null, true);
-    // Scoped regex match for team/project preview domains
-    if (APPROVED_PREVIEW_PATTERN.test(origin)) return callback(null, true);
-    // Allow localhost only in non-production environments
-    if (env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
-      return callback(null, true);
-    }
+    if(isAllowedCorsOrigin(origin,env.WEB_ORIGIN,process.env.VERCEL_URL,env.NODE_ENV==='production'))return callback(null,true);
     return callback(new HttpError(403, 'CORS origin not allowed: ' + origin), false);
   },
   credentials: true,
-  methods: ['GET','POST','PATCH','DELETE','OPTIONS'],
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','X-EduConnect-School-ID','X-EduConnect-Legacy-Token']
 }));
 app.use(compression());
@@ -82,6 +73,7 @@ if (process.env.NODE_ENV === 'development' && process.env.AUTO_MIGRATE === 'true
 }
 
 app.get(['/health', '/api/health'], async (_req, res) => {
+  res.setHeader('Cache-Control','no-store');
   try {
     if(env.NODE_ENV==='production') await verifyRuntimeDatabaseRoles();
     await pool.query('SELECT 1');
@@ -99,6 +91,26 @@ app.get(['/health', '/api/health'], async (_req, res) => {
       error: 'Database connectivity check failed',
       timestamp: new Date().toISOString()
     });
+  }
+});
+app.get(['/readyz','/api/readyz'],async(_req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  const checks={database:false,firebaseAdmin:false,storage:false};
+  try{
+    await verifyRuntimeDatabaseRoles();
+    await Promise.all([pool.query('SELECT 1'),platformPool.query('SELECT 1')]);
+    checks.database=true;
+    const auth=initializeFirebaseAdmin();
+    if(auth.app.options.projectId!==env.FIREBASE_PROJECT_ID)throw new Error('Firebase Admin project mismatch');
+    checks.firebaseAdmin=true;
+    for(const purpose of ['student_document','student_profile_photo','assignment_attachment','school_document'] as const){
+      const bucket=await storageClient().storage.getBucket(bucketForPurpose(purpose));
+      if(bucket.error||!bucket.data||bucket.data.public)throw new Error('Private storage bucket is unavailable');
+    }
+    checks.storage=true;
+    return res.json({status:'ready',checks,timestamp:new Date().toISOString()});
+  }catch{
+    return res.status(503).json({status:'not_ready',checks,error:'One or more required services are unavailable',timestamp:new Date().toISOString()});
   }
 });
 const authLimiter = env.NODE_ENV === 'production'
@@ -125,11 +137,11 @@ app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.N
     const code=(error as {code:string}).code;
     if(code==='23505')return res.status(409).json({error:'A record with those details already exists'});
     if(code==='23503'||code==='23514')return res.status(400).json({error:'The selected school record is not valid'});
-    if(code==='ECONNREFUSED'||code==='ETIMEDOUT')return res.status(503).json({error:'Database unavailable. On Vercel, connect a PostgreSQL database (e.g. Neon) in the Storage tab, or test on mobile via local network Wi-Fi.'});
+    if(code==='ECONNREFUSED'||code==='ETIMEDOUT')return res.status(503).json({error:'Database unavailable'});
   }
   const msg = (error as Error)?.message || '';
   if (msg.includes('Connection terminated') || msg.includes('connection timeout')) {
-    return res.status(503).json({error:'Database unavailable. On Vercel, connect a PostgreSQL database (e.g. Neon) in the Storage tab, or test on mobile via local network Wi-Fi.'});
+    return res.status(503).json({error:'Database unavailable'});
   }
   console.error('Unhandled API error',error);return res.status(500).json({error:'Internal server error'});
 });

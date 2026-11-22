@@ -118,21 +118,9 @@ For fully managed serverless infrastructure:
 
 ---
 
-### Option C: Vercel Deployment (Frontend / Mobile SPA)
+### Option C: EduConnect on Vercel
 
-The repository includes ready-to-deploy `vercel.json` configurations for Vercel's global CDN:
-
-1. **Import Project into Vercel**:
-   - Navigate to [vercel.com/new](https://vercel.com/new) and link your GitHub repository (`Arilsrinivas/school-dashboard`).
-   - The included `vercel.json` automatically configures:
-     - **Build Command**: `npm run vercel-build`
-     - **Output Directory**: `apps/web/dist`
-     - **Framework**: Vite
-     - **SPA Fallback Rewrites**: `/(.*) -> /index.html`
-2. **Environment Variables on Vercel**:
-   - Add `VITE_API_URL`: Points to your production API backend (e.g. `https://api.yourdomain.com` or Railway/Render service).
-3. **Deploy**:
-   - Vercel automatically deploys preview URLs on every branch and updates production on every push to `main`.
+EduConnect uses a separate Vercel project named `educonnect` rooted at the repository root. The same project serves the Vite frontend and the Node.js Express API under `/api`. The API uses the dedicated EduConnect PostgreSQL and Supabase Storage services; Firebase Authentication remains the identity provider. Follow [EDUCONNECT_VERCEL_PRODUCTION.md](EDUCONNECT_VERCEL_PRODUCTION.md) for project isolation, environment variables, Firebase domain setup, readiness checks, and rollback steps. Do not reuse Schoollog's Vercel project or its environment variables. `VITE_API_URL` must be empty for this same-origin deployment.
 
 ---
 

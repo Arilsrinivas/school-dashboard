@@ -18,7 +18,8 @@ function getSslConfig(url: string) {
     return undefined;
   }
   if(!local&&url.includes('sslmode=disable'))throw new Error('Remote PostgreSQL connections cannot disable TLS');
-  return { rejectUnauthorized: true,...(env.DATABASE_SSL_CA_CERT_PATH?{ca:readFileSync(env.DATABASE_SSL_CA_CERT_PATH,'utf8')}: {}) };
+  const ca=env.DATABASE_SSL_CA_CERT?.replace(/\\n/g,'\n')??(env.DATABASE_SSL_CA_CERT_PATH?readFileSync(env.DATABASE_SSL_CA_CERT_PATH,'utf8'):undefined);
+  return { rejectUnauthorized: true,...(ca?{ca}: {}) };
 }
 
 export const pool = new pg.Pool({
