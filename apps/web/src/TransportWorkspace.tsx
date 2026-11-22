@@ -110,28 +110,28 @@ export default function TransportWorkspace() {
       {/* Stats Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Active Fleet on Road</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Vehicles in sample data</div>
           <div style={{ fontSize: '26px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{routes.length} Buses</div>
         </div>
         <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Students Onboard</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Sample onboard count</div>
           <div style={{ fontSize: '26px', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>
             {routes.reduce((acc, r) => acc + r.studentsBoarded, 0)} Students
           </div>
         </div>
         <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Average Route Speed</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Sample route speed</div>
           <div style={{ fontSize: '26px', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>24 km/h</div>
         </div>
         <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Safety Telemetry</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, color: '#15803d', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={22} /> 100% Secure
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Preview status</div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#15803d', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={20} /> Demo only
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Routes List & Live Telemetry Inspector */}
+      {/* Main Grid: Sample Route List & Preview */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '20px' }}>
         {/* Left: Route Cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -176,19 +176,19 @@ export default function TransportWorkspace() {
           })}
         </div>
 
-        {/* Right: Selected Route Telemetry View */}
+        {/* Right: Selected Sample Route View */}
         <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '16px', marginBottom: '20px' }}>
             <div>
-              <div style={{ fontSize: '12px', color: '#64748b', fontFamily: 'monospace' }}>TELEMETRY INSPECTOR // {selectedRoute.id}</div>
+              <div style={{ fontSize: '12px', color: '#64748b', fontFamily: 'monospace' }}>SAMPLE ROUTE // {selectedRoute.id}</div>
               <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '4px 0' }}>{selectedRoute.routeCode}</h2>
               <div style={{ fontSize: '13px', color: '#64748b' }}>Plate: {selectedRoute.busNumber}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                <Gauge size={20} color="#16a34a" /> {selectedRoute.speedKmH} km/h
+            <Gauge size={20} color="#16a34a" /> {selectedRoute.speedKmH} km/h
               </div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>Speed Telemetry</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Sample speed value · not live telemetry</div>
             </div>
           </div>
 
@@ -204,7 +204,7 @@ export default function TransportWorkspace() {
             <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>ATTENDANT</div>
               <div style={{ fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>{selectedRoute.attendantName}</div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>RFID Attendance Active</div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>RFID integration not connected</div>
             </div>
           </div>
 
@@ -242,13 +242,13 @@ export default function TransportWorkspace() {
             </div>
           </div>
 
-          {/* Live Action Bar */}
+          {/* Sample action bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0fdf4', padding: '12px 16px', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
             <div style={{ fontSize: '12px', color: '#15803d' }}>
-              <strong>Approaching SMS Alerts:</strong> Triggered automatically when bus is within 500m of stop.
+              <strong>SMS alerts:</strong> Not sent. This control only previews sample message text.
             </div>
             <button
-              onClick={() => alert(`Simulated SMS Alert broadcast for ${selectedRoute.routeCode} next stop.`)}
+              onClick={() => alert(`Sample SMS preview for ${selectedRoute.routeCode} next stop. No message was sent.`)}
               style={{
                 background: '#16a34a',
                 color: '#ffffff',
@@ -260,7 +260,7 @@ export default function TransportWorkspace() {
                 cursor: 'pointer'
               }}
             >
-              Broadcast Alert
+              Preview SMS text
             </button>
           </div>
         </div>

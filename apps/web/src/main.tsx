@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { FirebaseAuthProvider } from './auth/firebase';
 import './styles.css';
+import './brand.css';
 
 const queryClient=new QueryClient({defaultOptions:{queries:{staleTime:30_000,retry:1,refetchOnWindowFocus:false}}});
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><FirebaseAuthProvider><QueryClientProvider client={queryClient}><BrowserRouter><App/></BrowserRouter></QueryClientProvider></FirebaseAuthProvider></React.StrictMode>);

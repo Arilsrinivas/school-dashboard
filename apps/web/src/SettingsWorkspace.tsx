@@ -234,7 +234,7 @@ export default function SettingsWorkspace({ user }: { user: User }) {
                 disabled={!canUpdate}
                 style={{ width: '16px', height: '16px' }}
               />
-              <span>Send administrator email digests on critical school events</span>
+              <span>Email administrator digests when an email provider is configured</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: canUpdate ? 'pointer' : 'default', fontSize: '0.9rem' }}>
               <input
@@ -244,7 +244,7 @@ export default function SettingsWorkspace({ user }: { user: User }) {
                 disabled={!canUpdate}
                 style={{ width: '16px', height: '16px' }}
               />
-              <span>Trigger parent push/email notifications when homework is assigned</span>
+              <span>Notify parents about homework when push or email delivery is configured</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: canUpdate ? 'pointer' : 'default', fontSize: '0.9rem' }}>
               <input
@@ -254,7 +254,7 @@ export default function SettingsWorkspace({ user }: { user: User }) {
                 disabled={!canUpdate}
                 style={{ width: '16px', height: '16px' }}
               />
-              <span>Automatically generate & email fee receipt vouchers on payment recording</span>
+              <span>Email fee receipts when an email provider is configured</span>
             </label>
           </div>
         </div>

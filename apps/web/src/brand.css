@@ -1,0 +1,73 @@
+.educonnect-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #183a31;
+  text-decoration: none;
+}
+
+.educonnect-brand .brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  object-fit: cover;
+  background: transparent;
+  border-radius: 10px;
+}
+
+.educonnect-brand .brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  line-height: 1.05;
+}
+
+.educonnect-brand .brand-copy strong {
+  color: inherit;
+  font: 800 15px/1.05 Manrope, sans-serif;
+  letter-spacing: -0.35px;
+  white-space: nowrap;
+}
+
+.educonnect-brand .brand-copy small {
+  margin: 0;
+  color: #71857b;
+  font: 600 9px/1.15 'DM Sans', sans-serif;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
+
+.educonnect-brand.inverse {
+  color: #fff;
+}
+
+.educonnect-brand.inverse .brand-copy small {
+  color: #bdd4c8;
+}
+
+.educonnect-brand.compact .brand-mark {
+  width: 38px;
+  height: 38px;
+}
+
+.edu-brand-link {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.educonnect-brand.landing-brand .brand-copy strong {
+  font-size: 18px;
+}
+
+.educonnect-brand.landing-brand .brand-copy small {
+  font-size: 9px;
+}
+
+.contact-brand-mark {
+  width: 28px !important;
+  height: 28px !important;
+}

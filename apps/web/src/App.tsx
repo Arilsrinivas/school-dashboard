@@ -16,6 +16,7 @@ const ReportsWorkspace = lazy(() => import('./ReportsWorkspace'));
 const SettingsWorkspace = lazy(() => import('./SettingsWorkspace'));
 const NotificationBell = lazy(() => import('./NotificationBell'));
 import EduConnectLanding from './EduConnectLanding';
+import EduConnectBrand from './EduConnectBrand';
 import { useFirebaseAuth } from './auth/firebase';
 import { firebaseConfigured, firebaseConfigurationError } from './auth/firebase';
 import StudentDocuments from './StudentDocuments';
@@ -30,10 +31,28 @@ const dateLabel=(value:string)=>new Intl.DateTimeFormat('en-IN',{day:'2-digit',m
 const money=(minor:number|null,currency='INR')=>minor===null?'Configured per contract':new Intl.NumberFormat('en-IN',{style:'currency',currency,maximumFractionDigits:0}).format(minor/100);
 
 export default function App(){
+  const location=useLocation();
   const firebaseState=useFirebaseAuth();
   const [user,setUser]=useState<User|null>(null),[ready,setReady]=useState(false);
   const [view, setView] = useState<'landing' | 'portal' | 'admissions' | 'transport'>('landing');
   const [demoOpen, setDemoOpen] = useState(false);
+
+  useEffect(()=>{
+    const path=location.pathname;
+    const page=path==='/accept-invitation'?'Accept invitation'
+      :path==='/recover-account'?'Account recovery'
+      :path==='/schools'?'Schools'
+      :path==='/activity'?'Activity log'
+      :path==='/team'?'Support team'
+      :view==='admissions'?'Admissions preview'
+      :view==='transport'?'Transport preview'
+      :user?.role==='super_admin'?'Platform administration'
+      :user?.role==='support_agent'?'Support workspace'
+      :user?'School workspace'
+      :view==='portal'?'Sign in'
+      :'School management';
+    document.title=`${page} | EduConnect`;
+  },[location.pathname,view,user?.role]);
 
   useEffect(()=>{if(firebaseState.configured&&!firebaseState.ready)return;restoreSession().then(async ok=>{if(ok){try{const me=await request<{user:User}>('/api/auth/me');setUser(me.user);}catch{await logout();}}setReady(true);});},[firebaseState.configured,firebaseState.ready]);
   if(window.location.pathname==='/accept-invitation')return <InvitationPage/>;
@@ -58,7 +77,7 @@ export default function App(){
       <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Admissions…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>EduConnect Admissions // Simulation with sample data</div>
-          <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
+          <button onClick={() => setView('landing')} className="edu-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
             ← Back to Home
           </button>
         </div>
@@ -72,7 +91,7 @@ export default function App(){
       <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted">Opening Transport…</div>}><div>
         <div style={{ background: '#09131f', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ color: '#ffffff', fontWeight: 700, fontSize: '15px' }}>EduConnect Transport // Simulation with sample data; GPS is not connected</div>
-          <button onClick={() => setView('landing')} className="sl-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
+          <button onClick={() => setView('landing')} className="edu-btn-secondary" style={{ padding: '6px 14px', fontSize: '12px' }}>
             ← Back to Home
           </button>
         </div>
@@ -130,13 +149,11 @@ function EduConnectContactModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="sl-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sl-modal-card">
+    <div className="edu-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="edu-modal-card">
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="sl-brand-mark" style={{ width: '28px', height: '28px' }}>
-              <GraduationCap size={16} />
-            </div>
+            <img className="brand-mark contact-brand-mark" src="/brand/educonnect-mark.svg" alt="" aria-hidden="true" />
             <strong style={{ fontSize: '16px', color: '#0f172a' }}>Contact CalmStacks about EduConnect</strong>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
@@ -153,7 +170,7 @@ function EduConnectContactModal({ onClose }: { onClose: () => void }) {
             <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px' }}>
               This demo request is a local prototype and has not been sent. Contact CalmStacks to arrange an EduConnect walkthrough for <strong>{form.schoolName}</strong>.
             </p>
-            <button onClick={onClose} className="sl-btn-primary" style={{ width: '100%' }}>
+            <button onClick={onClose} className="edu-btn-primary" style={{ width: '100%' }}>
               Done
             </button>
           </div>
@@ -218,7 +235,7 @@ function EduConnectContactModal({ onClose }: { onClose: () => void }) {
                 <option value="2500+ Students (School Chain)">2500+ Students (School Chain)</option>
               </select>
             </div>
-            <button type="submit" className="sl-btn-primary" style={{ width: '100%', marginTop: '6px', borderRadius: '8px' }}>
+            <button type="submit" className="edu-btn-primary" style={{ width: '100%', marginTop: '6px', borderRadius: '8px' }}>
               Confirm &amp; Request Demo Call
             </button>
           </form>
@@ -367,10 +384,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
   return (
     <main className="login-wrap">
       <section className="login-art">
-        <div className="brand inverse">
-          <div className="brand-mark"><GraduationCap size={21} /></div>
-          <span>calmstacks<span className="brand-light"> educonnect</span></span>
-        </div>
+        <EduConnectBrand inverse />
         <div className="art-copy">
           <div className="eyebrow-light"><span className="eyebrow-dot" /> MODERN SCHOOL PLATFORM</div>
           <h1 style={{ whiteSpace: 'pre-line' }}>{mode === 'register' ? 'Launch your school\nin seconds.' : 'Good schools\ngrow together.'}</h1>
@@ -381,17 +395,14 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
           </div>
         </div>
         <div className="art-footer">
-          <span>CALMSTACKS / EDUCATION</span>
+          <span>Powered by CalmStacks</span>
           <span>01 — 05</span>
         </div>
       </section>
 
       <section className="login-panel">
         <div className="login-form-wrap">
-          <div className="mobile-brand brand">
-            <div className="brand-mark"><GraduationCap size={20} /></div>
-            <span>calmstacks <b>educonnect</b></span>
-          </div>
+          <EduConnectBrand compact className="mobile-brand" />
 
           <div className="auth-mode-toggle">
             <button
@@ -587,10 +598,10 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
         </div>
 
         <div className="login-bottom">
-          <span>© 2026 CalmStacks</span>
-          <a href="mailto:support@calmstacks.example" className="quiet-link">
-            <CircleHelp size={14} /> Need help? Contact support
-          </a>
+          <span>© 2026 EduConnect</span>
+          <span className="quiet-link">
+            <CircleHelp size={14} /> Need help? Contact your school administrator
+          </span>
         </div>
       </section>
 
@@ -745,7 +756,7 @@ function AuthPortal({ onLogin }: { onLogin: (u: User) => void }) {
 function InvitationPage(){
   const token=new URLSearchParams(window.location.search).get('token')||'';const [name,setName]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[accepted,setAccepted]=useState<{name:string;schoolId:string}|null>(null);
   async function submit(e:React.FormEvent){e.preventDefault();setError('');if(password.length<12){setError('Choose a password with at least 12 characters.');return;}if(password!==confirm){setError('The passwords do not match.');return;}setBusy(true);try{const user=await acceptInvitation(token,name,password);setAccepted({name:user.name,schoolId:user.schoolId});}catch(ex){setError((ex as Error).message);}finally{setBusy(false);}}
-  return <main className="invite-page"><div className="invite-card"><div className="brand"><div className="brand-mark"><GraduationCap size={20}/></div><span>calmstacks <b>educonnect</b></span></div>{accepted?<><div className="success-icon invite-success"><Check size={22}/></div><div className="eyebrow">INVITATION ACCEPTED</div><h1>Your school workspace is ready.</h1><p>Welcome, {accepted.name}. Your administrator account for <b>{accepted.schoolId}</b> is active.</p><a className="btn btn-primary btn-wide invite-link" href="/">Open school workspace <ChevronRight size={16}/></a></>:<><div className="eyebrow invite-eyebrow">SCHOOL ADMINISTRATOR SETUP</div><h1>Accept your invitation</h1><p>Set up your account to open the school workspace.</p>{!token?<div className="error-banner">This invitation link is missing its token. Ask the CalmStacks team to send you a fresh invitation.</div>:<form className="form-stack" onSubmit={submit}><label>Your name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" autoComplete="name" required/></label><label>Create a password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" minLength={12} required/><small className="subtle">Use at least 12 characters.</small></label><label>Confirm password<input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" required/></label>{error&&<div className="error-banner">{error}</div>}<button className="btn btn-primary btn-wide" disabled={busy}>{busy?'Setting up…':'Set up administrator account'}<ChevronRight size={16}/></button></form>}<div className="login-note"><ShieldCheck size={15}/> Secure invitation · one time use</div></>}</div></main>;
+  return <main className="invite-page"><div className="invite-card"><EduConnectBrand className="invite-brand" />{accepted?<><div className="success-icon invite-success"><Check size={22}/></div><div className="eyebrow">INVITATION ACCEPTED</div><h1>Your school workspace is ready.</h1><p>Welcome, {accepted.name}. Your administrator account for <b>{accepted.schoolId}</b> is active.</p><a className="btn btn-primary btn-wide invite-link" href="/">Open school workspace <ChevronRight size={16}/></a></>:<><div className="eyebrow invite-eyebrow">SCHOOL ADMINISTRATOR SETUP</div><h1>Accept your invitation</h1><p>Set up your account to open the school workspace.</p>{!token?<div className="error-banner">This invitation link is missing its token. Ask the CalmStacks team to send you a fresh invitation.</div>:<form className="form-stack" onSubmit={submit}><label>Your name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name" autoComplete="name" required/></label><label>Create a password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" minLength={12} required/><small className="subtle">Use at least 12 characters.</small></label><label>Confirm password<input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" required/></label>{error&&<div className="error-banner">{error}</div>}<button className="btn btn-primary btn-wide" disabled={busy}>{busy?'Setting up…':'Set up administrator account'}<ChevronRight size={16}/></button></form>}<div className="login-note"><ShieldCheck size={15}/> Secure invitation · one time use</div></>}</div></main>;
 }
 
 function RecoveryPage(){
@@ -816,7 +827,7 @@ function RecoveryPage(){
   }
 
   return <main className="invite-page"><section className="invite-card">
-    <div className="brand"><div className="brand-mark"><ShieldCheck size={19}/></div><span>calmstacks <b>educonnect</b></span></div>
+    <EduConnectBrand className="recovery-brand" />
     <div className="eyebrow invite-eyebrow">ACCOUNT SECURITY</div>
     <h1>{token?'Choose a new password':'Recover your account'}</h1>
     <p>{token?'Enter your new secure password below (minimum 12 characters).':'We will send a one time recovery link if the account matches our records.'}</p>
@@ -1184,7 +1195,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       case 'homework': return 'Homework';
       case 'exams': return 'Exams & Results';
       case 'timetable': return 'Timetable';
-      case 'transport': return 'Transport GPS';
+      case 'transport': return 'Transport';
       case 'fees': return 'Fees & Payments';
       case 'announcements': return 'Announcements';
       case 'reports': return 'Reports';
@@ -1231,13 +1242,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
         >
           <Menu size={20} />
         </button>
-        <div className="brand" style={{ minWidth: 0 }}>
-          <div className="brand-mark"><GraduationCap size={19}/></div>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            educonnect
-            <small className="mobile-hide-sub">SCHOOL WORKSPACE</small>
-          </span>
-        </div>
+        <EduConnectBrand compact className="school-top-brand" />
       </div>
       <div className="school-top-actions">
         <NotificationBell onOpenAnnouncements={() => { setTab('announcements'); setMobileMenuOpen(false); }} />
@@ -1254,13 +1259,7 @@ function SchoolWorkspace({user,onLogout}:{user:User;onLogout:()=>void}){
       <div className="mobile-drawer-overlay" onClick={() => setMobileMenuOpen(false)}>
         <aside className="mobile-drawer" onClick={(e) => e.stopPropagation()}>
           <div className="mobile-drawer-header">
-            <div className="brand">
-              <div className="brand-mark"><GraduationCap size={20}/></div>
-              <div>
-                <strong style={{ fontSize: '15px', color: '#17251f', display: 'block' }}>educonnect</strong>
-                <div style={{ fontSize: '10px', color: '#64748b' }}>School Workspace</div>
-              </div>
-            </div>
+            <EduConnectBrand compact />
             <button type="button" className="icon-button" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
               <X size={20} />
             </button>
@@ -1434,16 +1433,16 @@ function ModalActions({pending,onCancel,submit,disabled}:{pending:boolean;onCanc
 function ControlPanel({user,onLogout}:{user:User;onLogout:()=>void}){
   const [mobileOpen,setMobileOpen]=useState(false),[createOpen,setCreateOpen]=useState(false),[settingsOpen,setSettingsOpen]=useState(false),[helpOpen,setHelpOpen]=useState(false),[notifOpen,setNotifOpen]=useState(false);const location=useLocation();
   const routes=[{to:'/',label:'Overview',icon:LayoutDashboard},{to:'/schools',label:'Schools',icon:Building2,badge:undefined},{to:'/subscriptions',label:'Subscriptions',icon:CreditCard,disabled:true},{to:'/activity',label:'Activity log',icon:Activity},{to:'/team',label:'Support team',icon:Users}];
-  return <div className="app-shell"><aside className={`sidebar ${mobileOpen?'mobile-open':''}`}><div className="brand side-brand"><div className="brand-mark"><GraduationCap size={20}/></div><span>calmstacks<small>EDUCONNECT</small></span></div><div className="side-label">WORKSPACE</div><div className="workspace-switch"><div className="workspace-icon"><ShieldCheck size={17}/></div><div><strong>Platform admin</strong><small>CalmStacks network</small></div><ChevronDown size={15} className="ml-auto text-muted"/></div><div className="side-label nav-label">MANAGE</div><nav className="side-nav">{routes.map(item=><NavLink key={item.to} to={item.to} onClick={()=>setMobileOpen(false)} className={({isActive})=>`nav-item ${isActive&&item.to==='/'&&location.pathname!=='/'?'':' '}${isActive?'active':''} ${item.disabled?'disabled':''}`}><item.icon size={18}/><span>{item.label}</span>{item.badge&&<em>{item.badge}</em>}</NavLink>)}</nav><div className="side-bottom"><div className="plan-card"><div className="plan-top"><span className="plan-icon"><Sparkles size={15}/></span><span>PLATFORM STATUS</span><span className="live-dot"/></div><strong>All systems operational</strong><div className="plan-meter"><i/></div><div className="plan-foot"><span>Infrastructure</span><b>Healthy</b></div></div><button type="button" className="nav-item" onClick={()=>setSettingsOpen(true)}><Settings2 size={18}/><span>Settings</span></button><button type="button" className="nav-item" onClick={()=>setHelpOpen(true)}><CircleHelp size={18}/><span>Help & support</span></button><div className="profile-row"><div className="avatar">{initials(user.name)}</div><div className="profile-meta"><strong>{user.name}</strong><small>Super administrator</small></div><button onClick={onLogout} className="icon-button" title="Sign out"><LogOut size={17}/></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}><Menu size={19}/></button><div className="crumb"><span>CalmStacks</span><ChevronRight size={14}/><b>{location.pathname==='/schools'?'Schools':location.pathname==='/activity'?'Activity log':location.pathname==='/team'?'Support team':'Overview'}</b></div><div className="topbar-actions"><div className="top-date"><span className="date-dot"/> {today().toUpperCase()}</div><button type="button" className="icon-button notification" onClick={()=>setNotifOpen(true)} title="System notifications"><Bell size={18}/><i/></button><div className="top-avatar">{initials(user.name)}</div></div></header><main className="page-content"><Routes><Route path="/" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/schools" element={<SchoolsPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/activity" element={<ActivityPage/>}/><Route path="/team" element={<TeamPage/>}/><Route path="*" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/></Routes></main><footer className="main-footer"><span>CALMSTACKS EDUCONNECT <i>•</i> PLATFORM CONTROL</span><span>Secure workspace <ShieldCheck size={13}/></span></footer></div>
+  return <div className="app-shell"><aside className={`sidebar ${mobileOpen?'mobile-open':''}`}><EduConnectBrand className="side-brand" /><div className="side-label">WORKSPACE</div><div className="workspace-switch"><div className="workspace-icon"><ShieldCheck size={17}/></div><div><strong>Platform admin</strong><small>CalmStacks network</small></div><ChevronDown size={15} className="ml-auto text-muted"/></div><div className="side-label nav-label">MANAGE</div><nav className="side-nav">{routes.map(item=><NavLink key={item.to} to={item.to} onClick={()=>setMobileOpen(false)} className={({isActive})=>`nav-item ${isActive&&item.to==='/'&&location.pathname!=='/'?'':' '}${isActive?'active':''} ${item.disabled?'disabled':''}`}><item.icon size={18}/><span>{item.label}</span>{item.badge&&<em>{item.badge}</em>}</NavLink>)}</nav><div className="side-bottom"><div className="plan-card"><div className="plan-top"><span className="plan-icon"><Sparkles size={15}/></span><span>PLATFORM STATUS</span><span className="live-dot"/></div><strong>All systems operational</strong><div className="plan-meter"><i/></div><div className="plan-foot"><span>Infrastructure</span><b>Healthy</b></div></div><button type="button" className="nav-item" onClick={()=>setSettingsOpen(true)}><Settings2 size={18}/><span>Settings</span></button><button type="button" className="nav-item" onClick={()=>setHelpOpen(true)}><CircleHelp size={18}/><span>Help & support</span></button><div className="profile-row"><div className="avatar">{initials(user.name)}</div><div className="profile-meta"><strong>{user.name}</strong><small>Super administrator</small></div><button onClick={onLogout} className="icon-button" title="Sign out"><LogOut size={17}/></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-button mobile-menu" onClick={()=>setMobileOpen(!mobileOpen)}><Menu size={19}/></button><div className="crumb"><span>EduConnect</span><ChevronRight size={14}/><b>{location.pathname==='/schools'?'Schools':location.pathname==='/activity'?'Activity log':location.pathname==='/team'?'Support team':'Overview'}</b></div><div className="topbar-actions"><div className="top-date"><span className="date-dot"/> {today().toUpperCase()}</div><button type="button" className="icon-button notification" onClick={()=>setNotifOpen(true)} title="System notifications"><Bell size={18}/><i/></button><div className="top-avatar">{initials(user.name)}</div></div></header><main className="page-content"><Routes><Route path="/" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/schools" element={<SchoolsPage onCreate={()=>setCreateOpen(true)}/>}/><Route path="/activity" element={<ActivityPage/>}/><Route path="/team" element={<TeamPage/>}/><Route path="*" element={<OverviewPage onCreate={()=>setCreateOpen(true)}/>}/></Routes></main><footer className="main-footer"><span>EduConnect <i>•</i> Platform administration</span><span>Secure workspace <ShieldCheck size={13}/></span></footer></div>
     {createOpen&&<CreateSchoolModal onClose={()=>setCreateOpen(false)}/>}
     {settingsOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setSettingsOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">PLATFORM CONFIGURATION</div><h2>Platform Settings</h2><p>Core system parameters and tenant isolation controls.</p></div><button className="icon-button" onClick={()=>setSettingsOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'1rem',padding:'1rem 0'}}>
-      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Database Wire Server:</strong> PostgreSQL 16 (Wire Protocol on 127.0.0.1:5432)<div style={{fontSize:'0.75rem',color:'#64748b'}}>Embedded multi-tenant schema with Row-Level Security (RLS) enforcement.</div></div>
-      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Authentication Engine:</strong> Dual-Secret JWT + Refresh Cookie<div style={{fontSize:'0.75rem',color:'#64748b'}}>Tokens scoped to tenant context; zero tenant disclosure on cross-school queries.</div></div>
-      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Session TTL:</strong> Access tokens: 15 minutes · Refresh sessions: 7 days<div style={{fontSize:'0.75rem',color:'#64748b'}}>Recovery & invitation hashes expire after 30 minutes / 72 hours.</div></div>
+      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Database engine:</strong> PostgreSQL<div style={{fontSize:'0.75rem',color:'#64748b'}}>Embedded multi-tenant schema with Row-Level Security (RLS) enforcement.</div></div>
+      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Authentication provider:</strong> Firebase Authentication<div style={{fontSize:'0.75rem',color:'#64748b'}}>Accounts resolve through linked EduConnect memberships and assigned permissions.</div></div>
+      <div style={{padding:'0.85rem',border:'1px solid #e2e8f0',borderRadius:'8px',background:'#f8fafc'}}><strong>Account security:</strong> Invitation and recovery links<div style={{fontSize:'0.75rem',color:'#64748b'}}>Single-use links expire automatically.</div></div>
     </div><div className="modal-actions"><span/><button type="button" className="btn btn-primary" onClick={()=>setSettingsOpen(false)}>Done</button></div></section></div>}
-    {helpOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setHelpOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">ASSISTANCE & DOCUMENTATION</div><h2>Help & Support</h2><p>CalmStacks EduConnect administration guidelines.</p></div><button className="icon-button" onClick={()=>setHelpOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'1rem',padding:'1rem 0'}}>
-      <p style={{fontSize:'0.85rem',color:'#475569',lineHeight:1.6}}>CalmStacks EduConnect is a high-assurance multi-tenant education platform designed with strict per-tenant data boundaries, automated offline billing ledgers, attendance marking, and grade publishing.</p>
-      <div style={{padding:'0.85rem',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'8px'}}><strong style={{color:'#166534'}}>Technical Support Hotline:</strong><div style={{fontSize:'0.8rem',color:'#15803d',marginTop:'0.25rem'}}>Email: support@calmstacks.example · Mon–Fri, 9am–6pm IST</div></div>
+    {helpOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setHelpOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">ASSISTANCE & DOCUMENTATION</div><h2>Help & Support</h2><p>EduConnect administration guidelines. Powered by CalmStacks.</p></div><button className="icon-button" onClick={()=>setHelpOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'1rem',padding:'1rem 0'}}>
+      <p style={{fontSize:'0.85rem',color:'#475569',lineHeight:1.6}}>EduConnect is a multi-tenant education platform with school-scoped access controls, attendance, fees, and academic workflows.</p>
+      <div style={{padding:'0.85rem',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'8px'}}><strong style={{color:'#166534'}}>Technical Support Hotline:</strong><div style={{fontSize:'0.8rem',color:'#15803d',marginTop:'0.25rem'}}>Support is available through your approved CalmStacks contact channel.</div></div>
     </div><div className="modal-actions"><span/><button type="button" className="btn btn-primary" onClick={()=>setHelpOpen(false)}>Close</button></div></section></div>}
     {notifOpen&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setNotifOpen(false);}}><section className="modal" style={{maxWidth:'540px'}}><div className="modal-head"><div><div className="eyebrow">SYSTEM BROADCASTS</div><h2>Platform Notifications</h2><p>Infrastructure alerts and platform-wide events.</p></div><button className="icon-button" onClick={()=>setNotifOpen(false)}><X size={19}/></button></div><div style={{display:'flex',flexDirection:'column',gap:'0.75rem',padding:'1rem 0'}}>
       <div style={{padding:'0.75rem 1rem',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:'8px'}}><div style={{fontWeight:600,fontSize:'0.85rem',color:'#0f172a'}}>PostgreSQL Wire Engine Healthy</div><div style={{fontSize:'0.75rem',color:'#64748b'}}>Connection pool active with 0 hung clients. Migrations 001–008 applied.</div></div>
@@ -1466,7 +1465,7 @@ function SupportConsole({user,onLogout}:{user:User;onLogout:()=>void}){
   const create=useMutation({mutationFn:()=>request('/api/platform/support-access',{method:'POST',body:JSON.stringify({schoolId,reason,durationMinutes,scopes})}),onSuccess:()=>{setReason('');void qc.invalidateQueries({queryKey:['support-cases']});}});
   async function viewStudents(item:SupportCase){setError('');try{const data=await request<{items:Record<string,unknown>[];total:number}>(`/api/platform/support-access/${item.id}/students`);setPreview(data.items);}catch(ex){setError((ex as Error).message);}}
   const choices=['students:read','fees:read','announcements:read','messages:read'];
-  return <main className="school-app"><header className="school-top"><div className="brand"><div className="brand-mark"><ShieldCheck size={18}/></div><span>calmstacks<small>TECHNICAL SUPPORT</small></span></div><div className="school-top-actions"><div className="top-avatar">{initials(user.name)}</div><button className="btn btn-secondary small-btn" onClick={onLogout}><LogOut size={14}/> Sign out</button></div></header><section className="school-welcome"><div className="eyebrow">PLATFORM SUPPORT</div><h1>Support workspace.</h1><p>Ask a school administrator to approve the minimum data scope needed for a time‑limited investigation.</p></section><div className="team-grid"><section className="panel"><div className="panel-kicker">REQUEST SCHOOL ACCESS</div><h3>New support request</h3><form className="team-create" onSubmit={async e=>{e.preventDefault();setError('');try{await create.mutateAsync();}catch(ex){setError((ex as Error).message);}}}><label>School ID<input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0001" required/></label><label>Reason<textarea value={reason} onChange={e=>setReason(e.target.value)} minLength={12} maxLength={1000} required placeholder="Describe the technical issue and why access is needed."/></label><fieldset><legend>Requested data scopes</legend>{choices.map(scope=><label className="scope-check" key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={e=>setScopes(e.target.checked?[...scopes,scope]:scopes.filter(item=>item!==scope))}/>{scope}</label>)}</fieldset><label>Access window<select value={durationMinutes} onChange={e=>setDuration(Number(e.target.value))}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>1 hour</option><option value={120}>2 hours</option></select></label>{(error||create.isError)&&<div className="error-banner">{error||(create.error as Error).message}</div>}<button className="btn btn-primary" disabled={create.isPending||!scopes.length}>{create.isPending?'Submitting…':'Send to school administrator'}</button></form></section><section className="panel"><div className="panel-head"><div><div className="panel-kicker">AUDITABLE ACCESS</div><h3>Your support requests</h3></div></div>{cases.isLoading?<div className="table-loading"><div className="table-skeleton"/></div>:cases.data?.items.map(item=><div className="support-request" key={item.id}><div><strong>{item.school_name} · {item.status}</strong><small>{item.reason}</small><small>Requested {item.requested_scopes.join(', ')} · {new Date(item.requested_expires_at).toLocaleString()}</small>{item.approved_scopes.length>0&&<small>Approved {item.approved_scopes.join(', ')} · expires {item.expires_at?new Date(item.expires_at).toLocaleString():'—'}</small>}</div>{item.status==='approved'&&item.approved_scopes.includes('students:read')&&item.expires_at&&new Date(item.expires_at)>new Date()&&<button className="btn btn-secondary small-btn" onClick={()=>viewStudents(item)}>View authorized student list</button>}</div>)}</section></div>{error&&<div className="error-inline school-error">{error}</div>}{preview.length>0&&<section className="panel support-preview"><div className="panel-kicker">LIMITED SUPPORT VIEW</div><h3>Authorized student records</h3>{preview.map(row=><div key={String(row.id)} className="access-member"><strong>{String(row.first_name)} {String(row.last_name)}</strong><small>{String(row.admission_number)} · {String(row.status)}</small></div>)}</section>}</main>;
+  return <main className="school-app"><header className="school-top"><EduConnectBrand compact /><div className="school-top-actions"><div className="top-avatar">{initials(user.name)}</div><button className="btn btn-secondary small-btn" onClick={onLogout}><LogOut size={14}/> Sign out</button></div></header><section className="school-welcome"><div className="eyebrow">PLATFORM SUPPORT</div><h1>Support workspace.</h1><p>Ask a school administrator to approve the minimum data scope needed for a time‑limited investigation.</p></section><div className="team-grid"><section className="panel"><div className="panel-kicker">REQUEST SCHOOL ACCESS</div><h3>New support request</h3><form className="team-create" onSubmit={async e=>{e.preventDefault();setError('');try{await create.mutateAsync();}catch(ex){setError((ex as Error).message);}}}><label>School ID<input value={schoolId} onChange={e=>setSchoolId(e.target.value)} placeholder="e.g. CS-SCH-0001" required/></label><label>Reason<textarea value={reason} onChange={e=>setReason(e.target.value)} minLength={12} maxLength={1000} required placeholder="Describe the technical issue and why access is needed."/></label><fieldset><legend>Requested data scopes</legend>{choices.map(scope=><label className="scope-check" key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={e=>setScopes(e.target.checked?[...scopes,scope]:scopes.filter(item=>item!==scope))}/>{scope}</label>)}</fieldset><label>Access window<select value={durationMinutes} onChange={e=>setDuration(Number(e.target.value))}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>1 hour</option><option value={120}>2 hours</option></select></label>{(error||create.isError)&&<div className="error-banner">{error||(create.error as Error).message}</div>}<button className="btn btn-primary" disabled={create.isPending||!scopes.length}>{create.isPending?'Submitting…':'Send to school administrator'}</button></form></section><section className="panel"><div className="panel-head"><div><div className="panel-kicker">AUDITABLE ACCESS</div><h3>Your support requests</h3></div></div>{cases.isLoading?<div className="table-loading"><div className="table-skeleton"/></div>:cases.data?.items.map(item=><div className="support-request" key={item.id}><div><strong>{item.school_name} · {item.status}</strong><small>{item.reason}</small><small>Requested {item.requested_scopes.join(', ')} · {new Date(item.requested_expires_at).toLocaleString()}</small>{item.approved_scopes.length>0&&<small>Approved {item.approved_scopes.join(', ')} · expires {item.expires_at?new Date(item.expires_at).toLocaleString():'—'}</small>}</div>{item.status==='approved'&&item.approved_scopes.includes('students:read')&&item.expires_at&&new Date(item.expires_at)>new Date()&&<button className="btn btn-secondary small-btn" onClick={()=>viewStudents(item)}>View authorized student list</button>}</div>)}</section></div>{error&&<div className="error-inline school-error">{error}</div>}{preview.length>0&&<section className="panel support-preview"><div className="panel-kicker">LIMITED SUPPORT VIEW</div><h3>Authorized student records</h3>{preview.map(row=><div key={String(row.id)} className="access-member"><strong>{String(row.first_name)} {String(row.last_name)}</strong><small>{String(row.admission_number)} · {String(row.status)}</small></div>)}</section>}</main>;
 }
 
 function OverviewPage({onCreate}:{onCreate:()=>void}){

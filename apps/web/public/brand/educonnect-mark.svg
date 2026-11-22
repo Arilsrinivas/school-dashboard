@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">EduConnect</title>
+  <defs>
+    <linearGradient id="brand" x1="8" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#176a57"/>
+      <stop offset="1" stop-color="#103d3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="17" fill="url(#brand)"/>
+  <path d="M13 18.5c7.2-2.9 13.6-2.5 19 1.1v27.1c-5.4-3.6-11.8-4-19-1.1V18.5Z" fill="#fff"/>
+  <path d="M51 18.5c-7.2-2.9-13.6-2.5-19 1.1v27.1c5.4-3.6 11.8-4 19-1.1V18.5Z" fill="#b5f0d4"/>
+  <path d="M19 26h7M19 32h7M38 26h7M38 32h7" stroke="#176a57" stroke-linecap="round" stroke-width="2.5"/>
+  <path d="M32 19.5v27.2" stroke="#176a57" stroke-linecap="round" stroke-width="2" opacity=".55"/>
+</svg>

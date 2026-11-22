@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
-  GraduationCap, ArrowRight, CheckCircle2, ShieldCheck, Sparkles,
+  ArrowRight, CheckCircle2, ShieldCheck, Sparkles,
   Users, DollarSign, Calendar, Bus, BookOpen, Layers, Menu, X,
   Phone, Mail, Building2, ChevronRight, Star, PlayCircle
 } from 'lucide-react';
 import './educonnect.css';
+import EduConnectBrand from './EduConnectBrand';
 
 interface EduConnectLandingProps {
   onOpenDemo: () => void;
@@ -31,29 +32,26 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
       </div>
 
       {/* 2. Main Navigation Bar */}
-      <header className="sl-header">
-        <div className="sl-container sl-header-inner">
+      <header className="edu-header">
+        <div className="edu-container edu-header-inner">
           <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-            <a href="#" className="sl-brand-logo">
-              <div className="sl-brand-mark">
-                <GraduationCap size={22} />
-              </div>
-              <span>school<span style={{ color: '#16a34a' }}>log</span></span>
+            <a href="/" className="edu-brand-link" aria-label="EduConnect home">
+              <EduConnectBrand compact className="landing-brand" />
             </a>
-            <nav className="sl-nav-links" style={{ display: mobileMenuOpen ? 'none' : undefined }}>
-              <span className="sl-nav-item" onClick={() => onExploreModule('admissions')}>Admissions CRM</span>
-              <span className="sl-nav-item" onClick={() => onExploreModule('academics')}>Exams &amp; LMS</span>
-              <span className="sl-nav-item" onClick={() => onExploreModule('fees')}>Fee Accounts</span>
-              <span className="sl-nav-item" onClick={() => onExploreModule('attendance')}>Attendance &amp; HR</span>
-              <span className="sl-nav-item" onClick={() => onExploreModule('transport')}>Bus GPS Safety</span>
+            <nav className="edu-nav-links" style={{ display: mobileMenuOpen ? 'none' : undefined }}>
+              <span className="edu-nav-item" onClick={() => onExploreModule('admissions')}>Admissions CRM</span>
+              <span className="edu-nav-item" onClick={() => onExploreModule('academics')}>Exams &amp; Homework</span>
+              <span className="edu-nav-item" onClick={() => onExploreModule('fees')}>Fee Accounts</span>
+              <span className="edu-nav-item" onClick={() => onExploreModule('attendance')}>Attendance &amp; Staff</span>
+              <span className="edu-nav-item" onClick={() => onExploreModule('transport')}>Transport Management</span>
             </nav>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button onClick={onGoToLogin} className="sl-btn-secondary">
-              ERP Portal Sign In
+            <button onClick={onGoToLogin} className="edu-btn-secondary">
+              Sign in
             </button>
-            <button onClick={onOpenDemo} className="sl-btn-primary">
-              Book a Demo
+            <button onClick={onOpenDemo} className="edu-btn-primary">
+              Request a Walkthrough
               <ChevronRight size={16} />
             </button>
           </div>
@@ -61,55 +59,55 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
       </header>
 
       {/* 3. Hero Section */}
-      <section className="sl-hero">
-        <div className="sl-container">
-          <div className="sl-badge-mono">
-            <Sparkles size={13} /> The AI-Native School Operating System
+      <section className="edu-hero">
+        <div className="edu-container">
+          <div className="edu-badge-mono">
+            <Sparkles size={13} /> School operations, connected
           </div>
-          <h1 className="sl-hero-title">
-            One platform to run your school’s <span className="gradient-text">Admissions, Academics, Fees &amp; Safety.</span>
+          <h1 className="edu-hero-title">
+            One connected workspace for <span className="gradient-text">school teams and families.</span>
           </h1>
-          <p className="sl-hero-subtitle">
+          <p className="edu-hero-subtitle">
             Say goodbye to fragmented spreadsheets and legacy desktop software. EduConnect brings school administration, academics, and family workspaces together.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginBottom: '40px' }}>
-            <button onClick={onOpenDemo} className="sl-btn-primary" style={{ padding: '14px 28px', fontSize: '15px' }}>
+            <button onClick={onOpenDemo} className="edu-btn-primary" style={{ padding: '14px 28px', fontSize: '15px' }}>
               Request 1-on-1 School Demo
               <ArrowRight size={18} />
             </button>
-            <button onClick={onGoToLogin} className="sl-btn-secondary" style={{ padding: '14px 24px', fontSize: '15px' }}>
+            <button onClick={onGoToLogin} className="edu-btn-secondary" style={{ padding: '14px 24px', fontSize: '15px' }}>
               Launch ERP Workspace
             </button>
           </div>
 
-          {/* Interactive Live Stage Tabs */}
-          <div className="sl-tab-strip">
-            <button className={`sl-tab-pill ${activeTab === 'admissions' ? 'active' : ''}`} onClick={() => setActiveTab('admissions')}>
+          {/* Interactive Preview Tabs */}
+          <div className="edu-tab-strip">
+            <button className={`edu-tab-pill ${activeTab === 'admissions' ? 'active' : ''}`} onClick={() => setActiveTab('admissions')}>
               01. Admissions Funnel
             </button>
-            <button className={`sl-tab-pill ${activeTab === 'academics' ? 'active' : ''}`} onClick={() => setActiveTab('academics')}>
-              02. Board Exams &amp; LMS
+            <button className={`edu-tab-pill ${activeTab === 'academics' ? 'active' : ''}`} onClick={() => setActiveTab('academics')}>
+              02. Exams &amp; Homework
             </button>
-            <button className={`sl-tab-pill ${activeTab === 'fees' ? 'active' : ''}`} onClick={() => setActiveTab('fees')}>
+            <button className={`edu-tab-pill ${activeTab === 'fees' ? 'active' : ''}`} onClick={() => setActiveTab('fees')}>
               03. Fee Reconciliation
             </button>
-            <button className={`sl-tab-pill ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
+            <button className={`edu-tab-pill ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
               04. Attendance
             </button>
-            <button className={`sl-tab-pill ${activeTab === 'transport' ? 'active' : ''}`} onClick={() => setActiveTab('transport')}>
+            <button className={`edu-tab-pill ${activeTab === 'transport' ? 'active' : ''}`} onClick={() => setActiveTab('transport')}>
               05. Transport Preview
             </button>
           </div>
 
           {/* Dynamic Interactive Stage Card */}
-          <div className="sl-stage-card">
-            <div className="sl-stage-head">
+          <div className="edu-stage-card">
+            <div className="edu-stage-head">
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div className="sl-traffic-lights">
-                  <div className="sl-traffic-dot" style={{ background: '#ef4444' }} />
-                  <div className="sl-traffic-dot" style={{ background: '#f59e0b' }} />
-                  <div className="sl-traffic-dot" style={{ background: '#10b981' }} />
+                <div className="edu-traffic-lights">
+                  <div className="edu-traffic-dot" style={{ background: '#ef4444' }} />
+                  <div className="edu-traffic-dot" style={{ background: '#f59e0b' }} />
+                  <div className="edu-traffic-dot" style={{ background: '#10b981' }} />
                 </div>
                 <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748b' }}>
                   educonnect.school.workspace // {activeTab.toUpperCase()}
@@ -119,11 +117,11 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
                 onClick={() => onExploreModule(activeTab)}
                 style={{ background: 'transparent', border: 'none', color: '#16a34a', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
               >
-                Open Live Interactive Workspace <ArrowRight size={13} />
+                Explore interactive preview <ArrowRight size={13} />
               </button>
             </div>
 
-            {/* Simulated Live Product View */}
+            {/* Simulated Product Preview */}
             <div style={{ padding: '24px' }}>
               {activeTab === 'admissions' && (
                 <div>
@@ -274,10 +272,10 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
       </section>
 
       {/* 4. Core Modules Feature Grid */}
-      <section className="sl-features-section">
-        <div className="sl-container">
+      <section className="edu-features-section">
+        <div className="edu-container">
           <div style={{ textAlign: 'center', marginBottom: '50px' }}>
-            <div className="sl-badge-mono">Complete Enterprise Modules</div>
+            <div className="edu-badge-mono">Complete Enterprise Modules</div>
             <h2 style={{ fontSize: '36px', fontWeight: 800, color: '#0f172a', margin: '12px 0 8px' }}>
               Everything your institution needs, built natively into one suite.
             </h2>
@@ -286,9 +284,9 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
             </p>
           </div>
 
-          <div className="sl-grid-3">
-            <div className="sl-feature-card">
-              <div className="sl-feature-icon"><Users size={26} /></div>
+          <div className="edu-grid-3">
+            <div className="edu-feature-card">
+              <div className="edu-feature-icon"><Users size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Admissions CRM</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
                 Multi-channel inquiry capture, automated lead scoring, document vault, and one-click student admission into the SIS.
@@ -298,8 +296,8 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
               </button>
             </div>
 
-            <div className="sl-feature-card">
-              <div className="sl-feature-icon"><DollarSign size={26} /></div>
+            <div className="edu-feature-card">
+              <div className="edu-feature-icon"><DollarSign size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Smart Fee Management</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
                 Flexible fee structures, automatic WhatsApp reminders, online UPI/card payments, and bi-directional Tally ERP integration.
@@ -309,8 +307,8 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
               </button>
             </div>
 
-            <div className="sl-feature-card">
-              <div className="sl-feature-icon"><BookOpen size={26} /></div>
+            <div className="edu-feature-card">
+              <div className="edu-feature-icon"><BookOpen size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Exams &amp; Board Report Cards</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
                 Board-compliant grading rubrics (CBSE/ICSE), automated marks calculation, and 1-click batch report card PDF generation.
@@ -320,8 +318,8 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
               </button>
             </div>
 
-            <div className="sl-feature-card">
-              <div className="sl-feature-icon"><Calendar size={26} /></div>
+            <div className="edu-feature-card">
+              <div className="edu-feature-icon"><Calendar size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Attendance &amp; Staff HR</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
                 Attendance workflows; hardware, SMS, and payroll integrations require provider setup.
@@ -331,8 +329,8 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
               </button>
             </div>
 
-            <div className="sl-feature-card">
-              <div className="sl-feature-icon"><Bus size={26} /></div>
+            <div className="edu-feature-card">
+              <div className="edu-feature-icon"><Bus size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Transport Preview Tracking</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
                 Sample route interface only. GPS tracking, RFID boarding, and parent alerts are unavailable.
@@ -342,8 +340,8 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
               </button>
             </div>
 
-            <div className="sl-feature-card">
-              <div className="sl-feature-icon"><Layers size={26} /></div>
+            <div className="edu-feature-card">
+              <div className="edu-feature-icon"><Layers size={26} /></div>
               <h3 style={{ fontSize: '19px', fontWeight: 700, margin: '0 0 10px' }}>Parent &amp; Student Mobile App</h3>
               <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.6, flexGrow: 1, margin: '0 0 20px' }}>
                 Branded iOS &amp; Android apps providing instant homework access, digital fee payments, circulars, and direct teacher chat.
@@ -358,7 +356,7 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
 
       {/* Product principles */}
       <section style={{ background: '#0c1e33', color: '#ffffff', padding: '64px 0' }}>
-        <div className="sl-container">
+        <div className="edu-container">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '32px', textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: '42px', fontWeight: 900, color: '#22c55e', letterSpacing: '-0.02em' }}>New product</div>
@@ -382,14 +380,10 @@ export default function EduConnectLanding({ onOpenDemo, onGoToLogin, onExploreMo
 
       {/* 6. Footer */}
       <footer style={{ background: '#09131f', color: '#64748b', padding: '40px 0 24px', fontSize: '13px' }}>
-        <div className="sl-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div className="edu-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <GraduationCap size={20} color="#22c55e" />
-            <span style={{ color: '#ffffff', fontWeight: 700 }}>EduConnect</span>
+            <EduConnectBrand inverse compact className="landing-footer-brand" />
             <span>— School operations, connected</span>
-          </div>
-          <div>
-            Powered by CalmStacks
           </div>
         </div>
       </footer>
